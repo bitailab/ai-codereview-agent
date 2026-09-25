@@ -66,6 +66,12 @@ uv run ai-cr status <project> <iid>                                 # 查看问�
 | 开发者表示后续处理 | P1/P2 记为延期（不阻断）；P0 升级人工 |
 | human_reviewer 命令 | `/ai-confirm [理由]` 问题成立；`/ai-accept [理由]` 放行（或直接 resolve）；`/ai-downgrade P2` 调级；`/ai-review` 全量重审（任何人可用） |
 
+**静态分析（golangci-lint）**：以仓库自己的 `.golangci.yml` 为准（v1 格式自动迁移），额外启用 `unused`。
+在目标分支和 MR 各跑一次取差集，只报告本次新引入的问题；因此能发现“调用方被删导致的死代码”这类不在改动行上的问题。
+lint 问题不经模型复核、按 linter 映射级别（errcheck/govet/staticcheck 等为 P1），问题消失即自动判定修复。
+golangci-lint 需与仓库的 Go 版本匹配，例如仓库要求 Go 1.27 时：
+`GOTOOLCHAIN=go1.27.1 GOBIN=~/.local/share/ai-cr/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`
+
 **流水线门禁**：检测到新提交后，如果 MR 有流水线，会先等它跑完：
 - 运行中 → 等待，每轮轮询重新检查（流水线结束不会更新 MR 的 updated_at，所以会主动检查）；
 - 通过 → 开始 CR；

@@ -76,6 +76,7 @@ class ReviewState(TypedDict, total=False):
     intent: str                 # 本次 MR 的意图摘要
     files: list[dict]           # 待审文件块
     file: dict                  # review_file 扇出时的单个文件块
+    lint_issues: list[dict] | None  # 本次 MR 新引入的 lint 问题；None 表示静态分析未执行
     findings: list[dict]        # 当前 MR 全部问题（已有 + 新增），节点整体替换
     raw_findings: Annotated[list[dict], operator.add]   # review_file 扇出结果
     actions: Annotated[list[dict], operator.add]        # 待发布到 GitLab 的动作

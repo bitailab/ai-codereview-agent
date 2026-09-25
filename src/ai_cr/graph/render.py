@@ -9,7 +9,7 @@ from .gate import is_blocking
 SEV_ICON = {"P0": "🔴 P0", "P1": "🟠 P1", "P2": "🔵 P2"}
 CAT_NAME = {
     "bug": "逻辑缺陷", "concurrency": "并发", "performance": "性能", "security": "安全",
-    "resource": "资源泄漏", "error_handling": "错误处理", "style": "风格",
+    "resource": "资源泄漏", "error_handling": "错误处理", "style": "风格", "lint": "静态检查",
 }
 STATUS_NAME = {
     "OPEN": "待修复", "DISPUTED": "复核中", "ESCALATED": "待人工裁决", "VERIFYING": "验证中",

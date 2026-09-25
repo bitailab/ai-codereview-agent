@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import asdict
 from collections import Counter
 
 import yaml
@@ -10,9 +11,9 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from ..deps import Deps
 from ..diff_parser import FileDiff
-from ..git_repo import clean_evidence, is_ignored, locate_evidence, locate_snippet
+from ..git_repo import clean_evidence, is_ignored, locate_evidence, locate_snippet, normalize_code
 from ..llm import chat, clean_text, human, invoke_structured, invoke_text, render, system
-from ..static_analysis import run_static_analysis
+from ..static_analysis import run_golangci
 from . import render as R
 from .context_pack import build_context_pack
 from .gate import compute_conclusion
@@ -181,18 +182,31 @@ class Nodes:
             except Exception as e:  # noqa: BLE001
                 log.warning("生成意图摘要失败: %s", e)
 
-        static_hints: dict[str, list[str]] = {}
-        if cfg.static_analysis and candidates:
+        # 静态分析覆盖整个 MR 的改动（不受增量审查影响），用于新问题发现和 lint 类问题的修复验证
+        lint_issues = None
+        sa = cfg.static_analysis
+        lint_targets = [fd for p_, fd in diffs.items() if not fd.deleted and not fd.binary and not is_ignored(p_, ignore)]
+        if sa.enabled and any(fd.new_path.endswith(".go") for fd in lint_targets):
             try:
-                static_hints = run_static_analysis(
-                    mirror, head, candidates, self.d.cfg.data_path / "worktrees" / f"{iid}-{head[:8]}"
+                found = run_golangci(
+                    mirror, refs["base_sha"], head, lint_targets,
+                    self.d.cfg.data_path / "worktrees" / f"{pp.replace('/', '__')}-{iid}-{head[:8]}",
+                    configured_path=sa.golangci_lint, extra_linters=sa.extra_linters, timeout=sa.timeout_seconds,
                 )
             except Exception as e:  # noqa: BLE001
                 log.warning("静态分析失败: %s", e)
+                found = None
+            if found is None:
+                notes.append("静态分析（golangci-lint）未能执行，本轮仅基于模型审查。")
+            else:
+                lint_issues = [asdict(i) | {"fingerprint": i.fingerprint} for i in found]
+        hints: dict[str, list[str]] = {}
+        for li in lint_issues or []:
+            hints.setdefault(li["file"], []).append(f"L{li['line']} [{li['linter']}] {li['text']}")
         for f in files:
-            f["static_hints"] = "\n".join(static_hints.get(f["path"], [])) or "（无）"
+            f["static_hints"] = "\n".join(hints.get(f["path"], [])) or "（无）"
         log.info("%s!%s 待审 %d 个文件块", pp, iid, len(files))
-        return {"files": files, "intent": intent, "notes": notes}
+        return {"files": files, "intent": intent, "notes": notes, "lint_issues": lint_issues}
 
     def review_file(self, payload: dict) -> dict:
         """单个文件块：先理解（可调用工具），再按维度逐轮审查。"""
@@ -288,7 +302,7 @@ class Nodes:
         mirror = self.d.mirror(pp)
         pos_diffs = self.d.mr_diff(pp, refs["base_sha"], head, for_position=True)
         existing = state.get("findings", [])
-        new: list[dict] = []
+        new: list[dict] = self._lint_findings(state, existing, pos_diffs)  # lint 结果先入列，模型的重复报告会并入它
         dropped = 0
         cache: dict[str, str | None] = {}
         for r in state.get("raw_findings", []):
@@ -306,15 +320,18 @@ class Nodes:
             if not (loc <= (r.get("line") or 0) <= loc + span):
                 r["line"] = loc
             fd = pos_diffs.get(path)
-            line = fd.nearest_commentable(r["line"]) if fd else None
-            if line is None:
-                if r["severity"] == "P2":
+            near_change = bool(fd) and any(abs(n - r["line"]) <= 3 for n in fd.added_lines())
+            if not near_change:
+                # 模型读的是带完整函数上下文的 diff，容易把未改动的历史代码也报出来；只保留 P0（以普通讨论发布）
+                if r["severity"] != "P0":
                     dropped += 1
+                    log.info("丢弃（不在本次改动附近）: %s L%s %s", path, r["line"], r["title"])
                     continue
-                r["inline"] = False  # 问题代码不在本次改动范围内，只有 P0/P1 以普通讨论形式保留
+                r["inline"] = False
             else:
-                r["line"] = line
-                r["inline"] = True
+                line = fd.nearest_commentable(r["line"])
+                r["line"] = line or r["line"]
+                r["inline"] = line is not None
             r["fingerprint"] = fingerprint(path, r["category"], r["evidence"], r["title"])
             if self._match(r, existing) is not None:
                 continue
@@ -333,14 +350,36 @@ class Nodes:
         log.info("聚合：新问题 %d 条，丢弃 %d 条", len(new), dropped)
         return {"findings": existing + new}
 
+    def _lint_findings(self, state: ReviewState, existing: list[dict], pos_diffs: dict) -> list[dict]:
+        sev_map = self.d.cfg.review.static_analysis.severity
+        known = {x["fingerprint"] for x in existing}
+        out = []
+        for li in state.get("lint_issues") or []:
+            if li["fingerprint"] in known:
+                continue
+            fd = pos_diffs.get(li["file"])
+            inline = bool(fd and fd.position_for(li["line"]))  # 死代码等问题常落在未改动行上，此时以普通讨论发布
+            out.append({
+                "file": li["file"], "line": li["line"], "end_line": None,
+                "severity": sev_map.get(li["linter"], sev_map.get("default", "P2")), "category": "lint",
+                "title": f"[{li['linter']}] {li['text']}",
+                "detail": f"golangci-lint `{li['linter']}` 报告的问题，由本次 MR 引入（目标分支上不存在）：{li['text']}",
+                "evidence": li.get("source_line") or "", "suggestion": None,
+                "fingerprint": li["fingerprint"], "inline": inline, "status": "NEW", "source": "lint",
+                "passes": ["lint"],
+            })
+        return out
+
     @staticmethod
     def _match(r: dict, pool: list[dict]) -> int | None:
-        """同一指纹，或同一文件相邻位置（同类 ±3 行 / 跨类 ±2 行）视为同一个问题。"""
+        """同一指纹；或同一文件中：相邻位置（同类 ±3 行 / 跨类 ±2 行），或标题相同且相距不超过 10 行。"""
+        title = normalize_code(r.get("title", ""))
         for i, x in enumerate(pool):
             dist = abs((x.get("line") or 0) - (r.get("line") or 0))
-            if x["fingerprint"] == r["fingerprint"] or (
-                x["file"] == r["file"] and (dist <= 2 or (x["category"] == r["category"] and dist <= 3))
-            ):
+            if x["fingerprint"] == r["fingerprint"] or (x["file"] == r["file"] and (
+                dist <= 2 or (x["category"] == r["category"] and dist <= 3)
+                or (dist <= 10 and normalize_code(x.get("title", "")) == title)
+            )):
                 return i
         return None
 
@@ -357,9 +396,11 @@ class Nodes:
                 result.append(f)
                 continue
             consensus = len(f.get("passes") or [])
-            if consensus >= 2:
+            if f.get("source") == "lint":
+                pass  # 静态分析结论是确定的，不需要模型复核
+            elif consensus >= 2:
                 log.info("多轮共识（%d 轮），跳过复核: %s L%s %s", consensus, f["file"], f["line"], f["title"])
-            elif f["severity"] in ("P0", "P1"):
+            else:  # 只被一轮报出的问题（不论级别）都要复核
                 fd = diffs.get(f["file"])
                 msg = render(
                     "verify", file=f["file"], line=f["line"], severity=f["severity"], category=f["category"],
@@ -407,6 +448,18 @@ class Nodes:
                 findings.append(f)
                 continue
             last = f["last_checked_sha"]
+            if f.get("source") == "lint":
+                lint = state.get("lint_issues")
+                if lint is None:  # 本轮静态分析没跑成，保持原状态
+                    findings.append(f)
+                elif f["fingerprint"] in {x["fingerprint"] for x in lint}:
+                    findings.append(f | {"last_checked_sha": head})
+                else:
+                    upd, acts = self._close(f | {"last_checked_sha": head}, "FIXED",
+                                            f"✅ 已验证修复（`{head[:8]}`）：golangci-lint 不再报告该问题。", resolve=True)
+                    findings.append(upd)
+                    actions.extend(acts)
+                continue
             if mirror.has_commit(last) and f["file"] not in mirror.changed_files(last, head):
                 findings.append(f | {"last_checked_sha": head})
                 continue

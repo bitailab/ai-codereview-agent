@@ -25,6 +25,19 @@ class Env(BaseSettings):
     llm_max_tokens: int = 4096  # 单次输出上限，防止模型陷入重复生成
 
 
+class StaticAnalysisConfig(BaseModel):
+    enabled: bool = True
+    golangci_lint: str | None = None          # 为空时依次查找 ~/.local/share/ai-cr/bin/golangci-lint、PATH
+    extra_linters: list[str] = Field(default_factory=lambda: ["unused"])  # 在仓库 .golangci.yml 之外额外启用
+    timeout_seconds: int = 600
+    # lint 问题的级别；未列出的 linter 用 default
+    severity: dict[str, str] = Field(default_factory=lambda: {
+        "errcheck": "P1", "govet": "P1", "staticcheck": "P1", "gosec": "P1", "errorlint": "P1",
+        "forcetypeassert": "P1", "durationcheck": "P1", "bodyclose": "P1", "sqlclosecheck": "P1",
+        "default": "P2",
+    })
+
+
 class ReviewConfig(BaseModel):
     max_files: int = 40
     max_chunk_chars: int = 48000
@@ -32,7 +45,7 @@ class ReviewConfig(BaseModel):
     enable_tools: bool = True
     max_tool_steps: int = 6
     verify_votes: int = 1
-    static_analysis: bool = False
+    static_analysis: StaticAnalysisConfig = Field(default_factory=StaticAnalysisConfig)
     ignore: list[str] = Field(default_factory=list)
 
 

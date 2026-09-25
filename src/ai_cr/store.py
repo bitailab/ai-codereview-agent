@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS findings (
     first_sha TEXT NOT NULL,
     last_checked_sha TEXT NOT NULL,
     parent_fingerprint TEXT,
+    source TEXT NOT NULL DEFAULT 'llm',   -- llm | lint
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE (project_path, mr_iid, fingerprint)
@@ -94,7 +95,7 @@ CREATE TABLE IF NOT EXISTS processed_notes (
 FINDING_FIELDS = [
     "fingerprint", "discussion_id", "inline", "file", "line", "end_line", "severity", "category",
     "title", "detail", "evidence", "suggestion", "status", "status_reason", "dispute_rounds",
-    "first_sha", "last_checked_sha", "parent_fingerprint",
+    "first_sha", "last_checked_sha", "parent_fingerprint", "source",
 ]
 
 
@@ -116,6 +117,9 @@ class Store:
         for col in ("pipeline_wait_sha", "pipeline_notice"):
             if col not in cols:
                 self.conn.execute(f"ALTER TABLE mr_state ADD COLUMN {col} TEXT")
+        fcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(findings)")}
+        if "source" not in fcols:
+            self.conn.execute("ALTER TABLE findings ADD COLUMN source TEXT NOT NULL DEFAULT 'llm'")
 
     def _exec(self, sql: str, args: tuple | list = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -218,6 +222,7 @@ class Store:
         data["inline"] = 1 if f.get("inline", True) else 0
         data["dispute_rounds"] = data.get("dispute_rounds") or 0
         data["evidence"] = data.get("evidence") or ""
+        data["source"] = data.get("source") or "llm"
         existing = self._exec(
             "SELECT id FROM findings WHERE project_path=? AND mr_iid=? AND fingerprint=?",
             (project_path, mr_iid, data["fingerprint"]),

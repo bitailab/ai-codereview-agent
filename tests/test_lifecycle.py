@@ -11,7 +11,7 @@ from ai_cr.deps import Deps
 from ai_cr.graph import nodes as nodes_mod
 from ai_cr.graph.build import build_graph
 from ai_cr.graph.state import DisputeVerdict, FindingList, FixCheck, LLMFinding, ReplyIntent, VerifyVerdict
-from ai_cr.settings import Config, Env, ReviewConfig, Settings
+from ai_cr.settings import Config, Env, ReviewConfig, Settings, StaticAnalysisConfig
 from ai_cr.store import Store
 
 PP = "grp/svc"
@@ -111,7 +111,8 @@ def env(tmp_path, monkeypatch):
     gl.base = gl.start = main_sha
     gl.head = head1
     cfg = Config(projects=[PP], human_reviewer="alden", data_dir=str(tmp_path / "data"),
-                 review=ReviewConfig(passes=["all"], enable_tools=False))
+                 review=ReviewConfig(passes=["all"], enable_tools=False,
+                                     static_analysis=StaticAnalysisConfig(enabled=False)))
     cfg.data_path.mkdir(parents=True)
     settings = Settings(env=Env(gitlab_url="http://x", gitlab_token="t"), config=cfg)
     deps = Deps(settings=settings, store=Store(cfg.data_path / "state.db"), gl=gl)
@@ -231,8 +232,9 @@ def test_comment_conclusion_does_not_approve(env):
 
     def p2_only(schema, messages, **k):
         r = orig(schema, messages, **k)
-        if schema is FindingList:
-            r.findings[0].severity = "P2"
+        if schema in (FindingList, VerifyVerdict):
+            for x in (r.findings if schema is FindingList else [r]):
+                x.severity = "P2"
         return r
     N.invoke_structured = p2_only
     try:
@@ -240,3 +242,46 @@ def test_comment_conclusion_does_not_approve(env):
     finally:
         N.invoke_structured = orig
     assert s["conclusion"] == "COMMENT" and env.gl.approved is None
+
+
+def test_lint_findings_lifecycle(env, monkeypatch):
+    """lint 新问题：不经模型复核直接发布；落在未改动行上时发普通讨论；lint 不再报告时自动判定修复。"""
+    from ai_cr.static_analysis import LintIssue
+
+    env.deps.settings.config.review.static_analysis.enabled = True
+    unused = LintIssue("unused", "svc.go", 3, "var cache is unused", "var cache = map[string]int{}")
+    errcheck = LintIssue("errcheck", "svc.go", 11, "Error return value is not checked", "cache[k] = v")
+    current = {"issues": [unused, errcheck]}
+    monkeypatch.setattr(nodes_mod, "run_golangci", lambda *a, **k: current["issues"])
+    verify_calls = []
+    orig = nodes_mod.invoke_structured
+
+    def spy(schema, messages, **k):
+        if schema is VerifyVerdict:
+            verify_calls.append(messages)
+        if schema is FindingList:  # 模型本轮不报问题，只看 lint
+            return FindingList(findings=[])
+        return orig(schema, messages, **k)
+    monkeypatch.setattr(nodes_mod, "invoke_structured", spy)
+
+    s = run(env, "new_push")
+    by_title = {f["title"]: f for f in env.deps.store.findings(PP, 7)}
+    u, e = by_title["[unused] var cache is unused"], by_title["[errcheck] Error return value is not checked"]
+    assert u["source"] == "lint" and u["severity"] == "P2" and u["inline"] == 0   # 第 3 行不在 diff 范围内 → 普通讨论
+    assert e["severity"] == "P1" and e["inline"] == 1                              # 第 11 行是新增行 → 行内
+    assert not verify_calls                                                        # 不送模型复核
+    assert s["conclusion"] == "REQUEST_CHANGES"                                    # P1 阻断
+
+    # 新 push 后 errcheck 消失 → 自动判定修复并 resolve
+    git(env.origin, "checkout", "-q", "feat")
+    (env.origin / "svc.go").write_text(BUGGY + "\n// touch\n")
+    git(env.origin, "commit", "-qam", "fix lint")
+    env.gl.head = git(env.origin, "rev-parse", "HEAD")
+    git(env.origin, "update-ref", "refs/merge-requests/7/head", env.gl.head)
+    current["issues"] = [unused]
+    s = run(env, "new_push")
+    by_title = {f["title"]: f for f in env.deps.store.findings(PP, 7)}
+    assert by_title["[errcheck] Error return value is not checked"]["status"] == "FIXED"
+    assert env.gl.resolved[by_title["[errcheck] Error return value is not checked"]["discussion_id"]] is True
+    assert by_title["[unused] var cache is unused"]["status"] == "OPEN"
+    assert s["conclusion"] == "COMMENT"

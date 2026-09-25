@@ -88,3 +88,20 @@ def test_locate_evidence_handles_escaped_and_fuzzy():
     # 模型改写了一行，但大部分行仍能在附近找到
     assert locate_evidence(content, "go func() {\n    cache[k] = v // 写入\n}()", 4) == 4
     assert locate_evidence(content, "mu.Lock()\nother()", 4) is None
+
+
+def test_lint_new_issues_ignores_line_shift():
+    from ai_cr.static_analysis import LintIssue, new_issues
+    base = [LintIssue("errcheck", "a.go", 10, "x not checked"), LintIssue("unused", "a.go", 30, "func old is unused")]
+    head = [LintIssue("errcheck", "a.go", 14, "x not checked"),          # 历史问题，行号因改动下移
+            LintIssue("unused", "a.go", 50, "func helper is unused")]     # 本次引入
+    assert [i.text for i in new_issues(head, base)] == ["func helper is unused"]
+
+
+def test_match_dedupes_same_title_nearby():
+    from ai_cr.graph.nodes import Nodes
+    a = {"fingerprint": "a", "file": "x.go", "line": 214, "category": "bug", "title": "retries 为 0 时行为未明确"}
+    b = {"fingerprint": "b", "file": "x.go", "line": 217, "category": "error_handling", "title": "retries 为 0 时行为未明确"}
+    c = {"fingerprint": "c", "file": "x.go", "line": 240, "category": "bug", "title": "retries 为 0 时行为未明确"}
+    assert Nodes._match(b, [a]) == 0
+    assert Nodes._match(c, [a]) is None
