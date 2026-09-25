@@ -1,0 +1,54 @@
+# 复制为 config.yaml 后修改：cp config.example.yaml config.yaml
+# 需要自动 CR 的仓库（GitLab project path）
+projects:
+  - my-group/service-a
+  - my-group/service-b
+
+# MR 的 reviewer 或 assignee 是这个人时触发 CR；争议升级时 @ 这个人；只接受这个人的 /ai-* 命令
+human_reviewer: your-gitlab-username
+
+poll_interval_seconds: 60
+quiet_seconds: 120          # MR 最近一次更新后静默多久才开始审查（防抖）
+rescan_open_findings_seconds: 600
+
+git_url_style: ssh          # ssh | http（http 时用 token 通过 extraHeader 认证）
+data_dir: ./data
+
+review:
+  max_files: 40             # 超过则只审最重要的文件
+  max_chunk_chars: 48000    # 单次送入模型的 diff 字符上限（约 16K token）
+  passes:                   # 按维度分轮审查；想加快可只留一个 all
+    - correctness
+    - robustness
+    - security_performance
+  enable_tools: true        # 理解阶段允许模型调用 read_file/grep/list_dir
+  max_tool_steps: 6
+  verify_votes: 1           # P0/P1 复核投票次数（奇数）
+  static_analysis: false    # 需要本地有 go 工具链且依赖可拉取
+  ignore:
+    - "*.lock"
+    - "*.sum"
+    - "*.png"
+    - "*.jpg"
+    - "*.svg"
+    - "*.ico"
+    - "*.min.js"
+    - "*.pb.go"
+    - "*_mock.go"
+    - "mock_*.go"
+    - "vendor/*"
+    - "third_party/*"
+    - "*.pem"
+
+pipeline:
+  enabled: true               # MR 有流水线时，等它通过后再 CR（单测/集测/lint 先把关）
+  pass_statuses: [success]    # 视为通过的状态；若有手动 job 卡住，可加上 manual
+  fail_statuses: [failed, canceled]
+  create_grace_seconds: 300   # push 后 5 分钟仍没有流水线 → 视为没有 CI，直接 CR
+  max_wait_minutes: 180       # 流水线跑超过 3 小时仍未结束 → 不再等待，直接 CR
+  notify_on_failure: true     # 流水线失败时在汇总评论里提示开发者（每条流水线只提示一次）
+
+lifecycle:
+  max_dispute_rounds: 2
+  auto_approve: true
+  needs_human_label: "ai-review::needs-human"

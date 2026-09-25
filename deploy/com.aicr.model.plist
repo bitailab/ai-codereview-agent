@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 登录时启动 LM Studio 并加载审查模型；失败时 60 秒后重试 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.aicr.model</string>
+    <key>ProgramArguments</key>
+    <array><string>/bin/zsh</string><string>__SHARE__/start-model.sh</string></array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+    <key>ThrottleInterval</key><integer>60</integer>
+    <key>StandardOutPath</key><string>__SHARE__/model.log</string>
+    <key>StandardErrorPath</key><string>__SHARE__/model.log</string>
+</dict>
+</plist>

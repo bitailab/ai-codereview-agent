@@ -1,0 +1,74 @@
+"""串行消费任务队列（本地模型一次只跑一个 MR），崩溃后可从 checkpoint 恢复。"""
+from __future__ import annotations
+
+import logging
+import sqlite3
+import time
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+from .deps import Deps
+from .graph.build import build_graph
+from .llm import model_ready
+from .poller import poll_once
+
+log = logging.getLogger(__name__)
+
+
+def make_graph(deps: Deps):
+    conn = sqlite3.connect(deps.cfg.data_path / "checkpoints.db", check_same_thread=False)
+    return build_graph(deps, SqliteSaver(conn))
+
+
+def _config(job_id: int) -> dict:
+    return {"configurable": {"thread_id": f"job-{job_id}"}, "max_concurrency": 1, "recursion_limit": 200}
+
+
+def run_job(deps: Deps, graph, job: dict, resume: bool = False) -> None:
+    cfg = _config(job["id"])
+    event = {"kind": job["kind"], "project_path": job["project_path"], "mr_iid": job["mr_iid"], **job["payload"]}
+    log.info("处理任务 #%s %s %s!%s", job["id"], job["kind"], job["project_path"], job["mr_iid"])
+    if resume and graph.get_state(cfg).next:
+        log.info("从 checkpoint 恢复任务 #%s", job["id"])
+        graph.invoke(None, cfg)
+    else:
+        graph.invoke({"event": event, "dry_run": False, "full": bool(job["payload"].get("full"))}, cfg)
+
+
+def drain(deps: Deps, graph) -> None:
+    while job := deps.store.next_job():
+        try:
+            run_job(deps, graph, job, resume=True)
+            deps.store.finish_job(job["id"])
+        except Exception as e:  # noqa: BLE001
+            log.exception("任务 #%s 失败", job["id"])
+            deps.store.finish_job(job["id"], error=str(e)[:2000])
+
+
+def serve(deps: Deps) -> None:
+    graph = make_graph(deps)
+    for job in deps.store.running_jobs():  # 上次异常退出时正在执行的任务：放回队列，模型就绪后从 checkpoint 继续
+        log.info("任务 #%s 上次未完成，重新排队", job["id"])
+        deps.store.requeue_job(job["id"])
+    interval = deps.cfg.poll_interval_seconds
+    model_down: str | None = None
+    log.info("开始轮询，间隔 %ss，human_reviewer=@%s，bot=@%s", interval, deps.cfg.human_reviewer, deps.bot_username)
+    while True:
+        started = time.monotonic()
+        try:
+            n = poll_once(deps)
+            if n:
+                log.info("本轮新增 %d 个任务", n)
+        except Exception:  # noqa: BLE001
+            log.exception("轮询失败")
+        # 模型未就绪（开机时尚未加载完成等）时只轮询入队，任务保持 pending，就绪后再处理
+        ok, why = model_ready()
+        if ok:
+            if model_down:
+                log.info("模型已就绪，开始处理任务")
+            model_down = None
+            drain(deps, graph)
+        elif why != model_down:
+            log.warning("模型未就绪，暂不处理任务：%s", why)
+            model_down = why
+        time.sleep(max(5.0, interval - (time.monotonic() - started)))

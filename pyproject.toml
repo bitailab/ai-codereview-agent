@@ -1,0 +1,30 @@
+[project]
+name = "ai-cr"
+version = "0.1.0"
+description = "Local-LLM GitLab MR code review agent built on LangGraph"
+authors = [
+    { name = "Alden", email = "haolong020225@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-core>=1.6.5",
+    "langchain-openai>=1.6.6",
+    "langgraph>=1.2.12",
+    "langgraph-checkpoint-sqlite>=3.1.1",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "python-gitlab>=8.5.0",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+ai-cr = "ai_cr.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
