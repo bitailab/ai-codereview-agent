@@ -23,6 +23,10 @@ class Env(BaseSettings):
     llm_temperature: float = 0.2
     llm_timeout: int = 900
     llm_max_tokens: int = 4096  # 单次输出上限，防止模型陷入重复生成
+    llm_verify_max_tokens: int = 8192  # 复核类调用可开启思考，需要更大的输出空间
+    # 思考模式开关（需要模型支持在 system 中用 /no_think 关闭思考，例如 Qwen3.6 的 switch 变体；对不支持的模型无副作用）
+    llm_review_no_think: bool = False
+    llm_verify_no_think: bool = False
 
 
 class StaticAnalysisConfig(BaseModel):

@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from ..deps import Deps
 from ..diff_parser import FileDiff
 from ..git_repo import clean_evidence, is_ignored, locate_evidence, locate_snippet, normalize_code
-from ..llm import chat, clean_text, human, invoke_structured, invoke_text, render, system
+from ..llm import chat, clean_text, human, invoke_structured, invoke_text, render, system, with_think_mode
 from ..static_analysis import run_golangci
 from . import render as R
 from .context_pack import build_context_pack
@@ -270,7 +270,7 @@ class Nodes:
             tools_hint="如需确认调用方、类型定义或加锁情况，可以调用工具 read_file / grep / list_dir / git_log 查看仓库代码（最多几次）。"
             if cfg.enable_tools else "",
         )
-        msgs = [self._sys(), human(text)]
+        msgs = with_think_mode([self._sys(), human(text)], "review")
         if not cfg.enable_tools:
             return invoke_text(msgs)
         tools = make_tools(mirror, head)

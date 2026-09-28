@@ -17,6 +17,8 @@ log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 THINK_RE = re.compile(r"<think>.*?</think>", re.S)
+# json_schema 模式下返回空内容的 (模型, 角色)：常见于“思考模式 + 结构化输出”，之后直接走文本解析，省去一次失败调用
+_SCHEMA_BROKEN: set[tuple[str, str]] = set()
 
 
 @lru_cache
@@ -29,7 +31,7 @@ def chat(role: str = "review", temperature: float | None = None) -> ChatOpenAI:
         api_key=env.llm_api_key,
         temperature=env.llm_temperature if temperature is None else temperature,
         timeout=env.llm_timeout,
-        max_tokens=env.llm_max_tokens,
+        max_tokens=env.llm_verify_max_tokens if role == "verify" else env.llm_max_tokens,
         max_retries=1,
     )
 
@@ -61,6 +63,16 @@ def extract_json(text: str) -> str:
     return text
 
 
+def with_think_mode(messages: list[BaseMessage], role: str) -> list[BaseMessage]:
+    """按角色在 system 消息中追加 /no_think，关闭该角色的思考模式。"""
+    env = get_settings().env
+    if not (env.llm_verify_no_think if role == "verify" else env.llm_review_no_think):
+        return messages
+    if messages and isinstance(messages[0], SystemMessage):
+        return [SystemMessage(f"{messages[0].content}\n/no_think"), *messages[1:]]
+    return [SystemMessage("/no_think"), *messages]
+
+
 def model_ready(min_context: int = 32768) -> tuple[bool, str]:
     """模型是否已按足够的上下文加载。LM Studio 提供 /api/v0/models；其他后端退化为检查 /v1/models。"""
     import httpx
@@ -86,19 +98,25 @@ def model_ready(min_context: int = 32768) -> tuple[bool, str]:
 
 
 def invoke_text(messages: list[BaseMessage], role: str = "review") -> str:
-    return clean_text(chat(role).invoke(messages).content)
+    return clean_text(chat(role).invoke(with_think_mode(messages, role)).content)
 
 
 def invoke_structured(schema: type[T], messages: list[BaseMessage], role: str = "review",
                       temperature: float | None = None) -> T:
     llm = chat(role, temperature)
-    if get_settings().env.llm_structured_mode == "json_schema":
+    messages = with_think_mode(messages, role)
+    key = (llm.model_name, role)
+    if get_settings().env.llm_structured_mode == "json_schema" and key not in _SCHEMA_BROKEN:
         try:
             result = llm.with_structured_output(schema, method="json_schema").invoke(messages)
             if isinstance(result, schema):
                 return result
         except Exception as e:  # noqa: BLE001 服务端不支持或输出不合法时降级
-            log.warning("json_schema 结构化输出失败，降级为文本解析: %s", str(e)[:300])
+            if "content=''" in str(e):
+                _SCHEMA_BROKEN.add(key)
+                log.warning("模型 %s 在 %s 角色下 json_schema 返回空内容，后续改用文本解析", *key)
+            else:
+                log.warning("json_schema 结构化输出失败，降级为文本解析: %s", str(e)[:300])
 
     schema_json = json.dumps(schema.model_json_schema(), ensure_ascii=False)
     msgs = [*messages, HumanMessage(
