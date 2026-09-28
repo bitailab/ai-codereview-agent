@@ -105,3 +105,24 @@ def test_match_dedupes_same_title_nearby():
     c = {"fingerprint": "c", "file": "x.go", "line": 240, "category": "bug", "title": "retries 为 0 时行为未明确"}
     assert Nodes._match(b, [a]) == 0
     assert Nodes._match(c, [a]) is None
+
+
+def test_parse_job_log_takes_latest_segment():
+    from ai_cr.ui import parse_job_log
+    lines = """2026-09-28 21:50:00,000 INFO ai_cr.worker: 处理任务 #7 new_push g/p!1
+2026-09-28 21:50:01,000 INFO ai_cr.graph.nodes: g/p!1 发布完成，结论 APPROVE
+2026-09-28 21:56:13,827 INFO ai_cr.worker: 处理任务 #11 new_push g/p!462
+2026-09-28 21:56:19,143 WARNING ai_cr.static_analysis: golangci-lint 执行失败（exit 3）: boom
+level=error msg="续行"
+2026-09-28 21:57:18,619 INFO ai_cr.graph.nodes: g/p!462 待审 3 个文件块
+2026-09-28 21:58:00,000 INFO httpx2: HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions
+2026-09-28 21:58:30,000 INFO ai_cr.graph.nodes:   a/b.go (1/2): 2 条候选问题
+2026-09-28 21:59:00,000 INFO ai_cr.graph.nodes:   a/b.go (2/2): 0 条候选问题
+2026-09-28 22:00:00,000 INFO ai_cr.worker: 处理任务 #12 dev_reply g/p!1""".splitlines()
+    p = parse_job_log(lines, 11)
+    assert p["phase"] == "review" and p["total"] == 3 and p["conclusion"] is None
+    assert [(c["chunk"], c["n"], c["since"][11:]) for c in p["chunks"]] == [(1, 2, "21:57:18"), (2, 0, "21:58:30")]
+    assert p["cursor_ts"].endswith("21:59:00")
+    assert "续行" in p["warnings"][0] and not any("HTTP Request" in x for x in p["lines"])
+    assert parse_job_log(lines, 7)["phase"] == "done"
+    assert parse_job_log(lines, 99) == {"found": False}

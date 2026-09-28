@@ -157,6 +157,14 @@ class Store:
             ("failed" if error else "done", error, now(), job_id),
         )
 
+    def recent_jobs(self, limit: int = 50) -> list[dict]:
+        rows = self._exec("SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) | {"payload": json.loads(r["payload"])} for r in rows]
+
+    def job(self, job_id: int) -> dict | None:
+        row = self._exec("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        return dict(row) | {"payload": json.loads(row["payload"])} if row else None
+
     def requeue_job(self, job_id: int) -> None:
         self._exec("UPDATE jobs SET status='pending', updated_at=? WHERE id=?", (now(), job_id))
 
@@ -190,6 +198,11 @@ class Store:
             " VALUES (?,?,?,?,?,?)",
             (project_path, mr_iid, head_sha, conclusion, summary, now()),
         )
+
+    def reviews(self, project_path: str, mr_iid: int) -> list[dict]:
+        return [dict(r) for r in self._exec(
+            "SELECT * FROM reviews WHERE project_path=? AND mr_iid=? ORDER BY id DESC", (project_path, mr_iid)
+        ).fetchall()]
 
     def last_summary(self, project_path: str, mr_iid: int) -> str | None:
         row = self._exec(

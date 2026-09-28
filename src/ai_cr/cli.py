@@ -22,6 +22,8 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("status", help="查看某个 MR 的问题状态")
     s.add_argument("project")
     s.add_argument("iid", type=int)
+    u = sub.add_parser("ui", help="本地状态页：任务队列、审查进度、问题列表")
+    u.add_argument("--port", type=int, default=8765)
     args = p.parse_args(argv)
 
     logging.basicConfig(
@@ -66,6 +68,9 @@ def main(argv: list[str] | None = None) -> None:
             print(f"[{f['severity']}] {f['status']:<10} {f['file']}:{f['line']}  {f['title']}")
             for e in deps.store.events(f["id"]):
                 print(f"      {e['created_at']} {e['actor']}: {e['kind']} {(e['content'] or '')[:80]}")
+    elif args.cmd == "ui":
+        from .ui import serve_ui
+        serve_ui(deps, args.port)
     elif args.cmd == "run":
         from .worker import serve
         serve(deps)
