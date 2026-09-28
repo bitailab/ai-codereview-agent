@@ -8,6 +8,9 @@
     <array>
         <string>__UV__</string><string>run</string><string>ai-cr</string><string>run</string>
     </array>
+    <!-- launchd 默认 PATH 不含 go / golangci-lint，静态分析需要 -->
+    <key>EnvironmentVariables</key>
+    <dict><key>PATH</key><string>__PATH__</string></dict>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
     <key>StandardOutPath</key><string>__REPO__/data/agent.log</string>
