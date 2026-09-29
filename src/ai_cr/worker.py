@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import sqlite3
+import subprocess
 import time
 
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -45,7 +48,16 @@ def drain(deps: Deps, graph) -> None:
             deps.store.finish_job(job["id"], error=str(e)[:2000])
 
 
+def keep_awake() -> None:
+    """macOS 闲置睡眠会让轮询和模型推理一起停住。-s 只在接电源时阻止睡眠（用电池时照常睡）；-w 跟随本进程退出，不会遗留。"""
+    if caffeinate := shutil.which("caffeinate"):
+        subprocess.Popen([caffeinate, "-s", "-w", str(os.getpid())],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        log.info("已阻止系统闲置睡眠（caffeinate）")
+
+
 def serve(deps: Deps) -> None:
+    keep_awake()
     graph = make_graph(deps)
     for job in deps.store.running_jobs():  # 上次异常退出时正在执行的任务：放回队列，模型就绪后从 checkpoint 继续
         log.info("任务 #%s 上次未完成，重新排队", job["id"])

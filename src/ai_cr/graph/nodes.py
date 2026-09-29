@@ -58,6 +58,15 @@ PASS_CHECKLISTS = {
     ),
 }
 
+# 生成代码的标准标记（https://go.dev/s/generatedcode，protoc/mockgen/stringer 等都遵循）
+GENERATED_RE = re.compile(r"^// Code generated .* DO NOT EDIT\.$", re.M)
+
+
+def is_generated(content: str | None) -> bool:
+    """文件头部（package 声明之前的注释区）带生成标记。"""
+    return bool(content) and GENERATED_RE.search(content[:2000]) is not None
+
+
 DISPUTE_WORDS = ("误报", "不是问题", "不存在", "没问题", "设计如此", "故意", "不需要", "false positive", "by design")
 FIXED_WORDS = ("已修复", "已修改", "已改", "修复了", "改了", "fixed", "done")
 DEFER_WORDS = ("后续", "以后", "下个版本", "下一版", "TODO", "issue", "later")
@@ -154,12 +163,18 @@ class Nodes:
 
         ignore = cfg.ignore + list(state["mr"].get("repo_ignore") or [])
         candidates: list[FileDiff] = []
+        generated: list[str] = []
         for path, fd in diffs.items():
             if fd.deleted or fd.binary or not fd.hunks or is_ignored(path, ignore):
                 continue
             if changed_since is not None and path not in changed_since:
                 continue
+            if is_generated(mirror.show(head, path)):  # 生成代码没有审查价值，模型缺少源接口时还容易误报
+                generated.append(path)
+                continue
             candidates.append(fd)
+        if generated:
+            notes.append(f"跳过 {len(generated)} 个自动生成的文件：" + "、".join(f"`{p}`" for p in generated[:20]))
         if len(candidates) > cfg.max_files:
             candidates.sort(key=lambda f: ("_test." in f.path, -len(f.added_lines())))
             skipped = candidates[cfg.max_files:]

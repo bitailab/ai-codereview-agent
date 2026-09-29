@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ from .diff_parser import FileDiff
 from .git_repo import Mirror
 
 log = logging.getLogger(__name__)
+
+V1_VERSION_RE = re.compile(r"""^version:[ \t]*["']?1["']?[ \t]*(#.*)?\n?""", re.M)
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,10 @@ def _prepare_config(lint: str, wt: Path) -> list[str]:
     text = cfg.read_text(encoding="utf-8", errors="replace")
     if "version:" in text and ('"2"' in text or "'2'" in text or "version: 2" in text):
         return []
+    # 显式写了 version: "1" 的配置，migrate 会报 "configuration version is already set: 1" 拒绝转换
+    stripped = V1_VERSION_RE.sub("", text)
+    if stripped != text:
+        cfg.write_text(stripped, encoding="utf-8")  # worktree 是临时副本，可以直接改
     res = subprocess.run([lint, "migrate", "--config", str(cfg), "--skip-validation"], cwd=wt, capture_output=True, text=True, timeout=120)
     if res.returncode == 0:
         log.info("已将 v1 格式的 %s 转换为 v2", cfg.name)
