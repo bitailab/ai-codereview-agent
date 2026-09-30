@@ -212,3 +212,33 @@ def test_path_affinity_prefers_same_file_then_dir():
     target = "app/edge/internal/events/service.go"
     paths = ["pkg/x.go", "app/edge/internal/handlers/a.go", "app/edge/internal/events/types.go", target]
     assert sorted(paths, key=lambda p: _path_affinity(p, target), reverse=True) == list(reversed(paths))
+
+
+def test_trace_records_call_with_step(tmp_path):
+    from uuid import uuid4
+
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langchain_core.outputs import ChatGeneration, LLMResult
+
+    from ai_cr.trace import TraceHandler, TraceReader, TraceStore, step
+
+    h = TraceHandler(TraceStore(tmp_path / "t.db"))
+    run = uuid4()
+    with step("审查 a.go [correctness]"):
+        h.on_chat_model_start({}, [[SystemMessage("sys"), HumanMessage("看看这段 diff")]], run_id=run,
+                              metadata={"thread_id": "job-7", "langgraph_node": "review_file"},
+                              invocation_params={"model": "m", "temperature": 0.2})
+    h.on_llm_end(LLMResult(generations=[[ChatGeneration(message=AIMessage("确认的问题：无"))]],
+                           llm_output={"token_usage": {"prompt_tokens": 12, "completion_tokens": 5}}), run_id=run)
+    fail = uuid4()
+    h.on_chat_model_start({}, [[HumanMessage("x")]], run_id=fail, metadata={"thread_id": "job-7"})
+    h.on_llm_error(RuntimeError("boom"), run_id=fail)
+
+    r = TraceReader(tmp_path / "t.db")
+    calls = r.calls("job-7")
+    assert [(c["step"], c["node"], c["prompt_tokens"], c["error"]) for c in calls] == [
+        ("审查 a.go [correctness]", "review_file", 12, None), ("", None, None, "boom")]
+    full = r.call(calls[0]["id"])
+    assert [m["role"] for m in full["request"]["messages"]] == ["system", "human"]
+    assert full["response"]["content"] == "确认的问题：无"
+    assert r.calls("job-8") == [] and TraceReader(tmp_path / "missing.db").calls("job-7") == []

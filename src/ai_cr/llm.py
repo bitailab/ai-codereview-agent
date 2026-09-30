@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, ValidationError
 
+from . import trace
 from .settings import ROOT, get_settings
 
 log = logging.getLogger(__name__)
@@ -54,8 +55,10 @@ def estimate_tokens(messages: list[BaseMessage]) -> int:
 
 @lru_cache
 def chat(role: str = "review", temperature: float | None = None) -> ChatOpenAI:
-    env = get_settings().env
+    settings = get_settings()
+    env = settings.env
     model = env.llm_verify_model if role == "verify" and env.llm_verify_model else env.llm_model
+    callbacks = [trace.handler(settings.config.data_path, env.llm_trace_days)] if env.llm_trace else None
     return ChatOpenAI(
         model=model,
         base_url=env.llm_base_url,
@@ -64,6 +67,7 @@ def chat(role: str = "review", temperature: float | None = None) -> ChatOpenAI:
         timeout=env.llm_timeout,
         max_tokens=env.llm_verify_max_tokens if role == "verify" else env.llm_max_tokens,
         max_retries=1,
+        callbacks=callbacks,
     )
 
 

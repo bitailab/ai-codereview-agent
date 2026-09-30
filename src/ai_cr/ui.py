@@ -18,6 +18,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from .deps import Deps
 from .graph.build import build_graph
 from .llm import model_ready
+from .trace import TraceReader
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ class UI:
         conn = sqlite3.connect(f"file:{deps.cfg.data_path / 'checkpoints.db'}?mode=ro", uri=True,
                                check_same_thread=False)
         self.graph = build_graph(deps, SqliteSaver(conn))
+        self.trace = TraceReader(deps.cfg.data_path / "llm_trace.db")
 
     def mr_url(self, pp: str, iid: int) -> str:
         return f"{self.d.settings.env.gitlab_url.rstrip('/')}/{pp}/-/merge_requests/{iid}"
@@ -162,6 +164,7 @@ class UI:
                                         "updated_at")} | {"payload": job["payload"], "url": self.mr_url(pp, iid)},
             "progress": prog, "graph": gs, "files": files, "findings": findings,
             "reviews": [{k: r[k] for k in ("head_sha", "conclusion", "created_at")} for r in self.d.store.reviews(pp, iid)],
+            "calls": self.trace.calls(f"job-{job_id}"),
         }
 
 
@@ -189,6 +192,9 @@ def make_handler(ui: UI):
                     self._json(ui.overview())
                 elif u.path == "/api/job":
                     data = ui.job(int(parse_qs(u.query)["id"][0]))
+                    self._json(data if data else {"error": "not found"}, 200 if data else 404)
+                elif u.path == "/api/call":
+                    data = ui.trace.call(int(parse_qs(u.query)["id"][0]))
                     self._json(data if data else {"error": "not found"}, 200 if data else 404)
                 else:
                     self._send(404, b"not found", "text/plain")
@@ -262,6 +268,10 @@ details summary { cursor: pointer; }
 pre { background: var(--code); padding: 8px 10px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap;
   word-break: break-word; font-size: 12px; margin: 6px 0; }
 .log { max-height: 360px; overflow-y: auto; }
+.msg { margin: 8px 0; }
+.msg .role { font-size: 12px; font-weight: 600; color: var(--muted); }
+.calls td.step { word-break: break-all; }
+.calls .bad { color: var(--bad); }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 .spin { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -283,6 +293,9 @@ const KIND = {new_push: "代码审查", dev_reply: "处理回复", human_command
 const STATUS = {pending: "排队", running: "进行中", done: "完成", failed: "失败"};
 const PHASES = [["load", "加载 MR"], ["plan", "规划 / 静态分析"], ["review", "逐文件审查"], ["verify", "聚合与复核"], ["done", "发布"]];
 let selected = null, pinned = false, openDetails = new Set();
+const callCache = new Map();  // 调用 id → 请求/回复数据（内容大，展开时才加载，刷新时复用）
+let lastJobRaw = "";  // 数据没变就不重绘，避免展开的长 prompt 每 3 秒被重置
+const ROLE = {system: "system", human: "user", ai: "assistant", tool: "tool"};
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const secs = (a, b) => a && b ? Math.round((new Date(b.replace(" ", "T")) - new Date(a.replace(" ", "T"))) / 1000) : null;
@@ -292,6 +305,48 @@ const nowStr = () => { const d = new Date(), p = n => String(n).padStart(2, "0")
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
 
 async function get(url) { const r = await fetch(url); return r.json(); }
+
+const utcLocal = s => s ? new Date(s.replace(" ", "T") + "Z").toLocaleTimeString("zh-CN", {hour12: false}) : "";
+const text = c => typeof c === "string" ? c : JSON.stringify(c, null, 2);
+
+function renderCall(c) {
+  if (c.error && !c.request) return `<pre class="bad">${esc(c.error)}</pre>`;
+  const q = c.request || {}, r = c.response || {}, p = q.params || {};
+  const dk = k => `data-key="c${c.id}-${k}" ${openDetails.has(`c${c.id}-${k}`) ? "open" : ""}`;
+  const meta = [p.model, p.temperature != null ? `temperature ${p.temperature}` : "",
+    p.max_tokens || p.max_completion_tokens ? `max_tokens ${p.max_tokens || p.max_completion_tokens}` : "", q.tools ? `工具 ${q.tools.join(", ")}` : "",
+    q.response_format ? "json_schema" : ""].filter(Boolean).join(" · ");
+  const msgs = (q.messages || []).map(m => `<div class="msg"><div class="role">${esc(ROLE[m.role] || m.role)}${m.tool_call_id ? " · " + esc(m.tool_call_id) : ""}</div>
+    <pre>${esc(text(m.content))}${m.tool_calls ? "\n\n" + esc(JSON.stringify(m.tool_calls, null, 2)) : ""}</pre></div>`).join("");
+  const reply = c.error ? `<pre class="bad">${esc(c.error)}</pre>` : [
+    r.reasoning ? `<details ${dk("think")}><summary class="muted">思考过程</summary><pre>${esc(r.reasoning)}</pre></details>` : "",
+    `<pre>${esc(text(r.content)) || '<span class="muted">（空）</span>'}</pre>`,
+    r.tool_calls ? `<div class="role">工具调用</div><pre>${esc(JSON.stringify(r.tool_calls, null, 2))}</pre>` : "",
+  ].join("");
+  return `<div class="muted">${esc(meta)}</div>
+    <details ${dk("req")}><summary>请求（${(q.messages || []).length} 条消息）</summary>${msgs}</details>
+    <div class="msg"><div class="role">回复</div>${reply}</div>`;
+}
+
+function bindDetails(root) {
+  root.querySelectorAll("details[data-key]").forEach(el => {
+    el.addEventListener("toggle", () => {
+      el.open ? openDetails.add(el.dataset.key) : openDetails.delete(el.dataset.key);
+      if (el.open && el.dataset.call) loadCall(el);
+    });
+    if (el.open && el.dataset.call && !callCache.has(+el.dataset.call)) loadCall(el);
+  });
+}
+
+async function loadCall(el) {
+  const id = +el.dataset.call;
+  if (!callCache.has(id)) callCache.set(id, await get("/api/call?id=" + id));
+  const body = el.querySelector(".body");
+  if (body.dataset.loaded) return;
+  body.dataset.loaded = "1";
+  body.innerHTML = renderCall(callCache.get(id));
+  bindDetails(body);
+}
 
 function renderOverview(o) {
   const m = o.model;
@@ -342,6 +397,18 @@ function renderJob(d) {
       </details></td></tr>`;
   }).join("");
 
+  const calls = d.calls || [];
+  const callRows = calls.map(c => {
+    const key = "c" + c.id;
+    const tok = c.prompt_tokens != null ? `${c.prompt_tokens} → ${c.completion_tokens ?? "?"}` : "";
+    return `<tr><td class="muted">${utcLocal(c.started_at)}</td>
+      <td class="step"><details data-key="${key}" data-call="${c.id}" ${openDetails.has(key) ? "open" : ""}>
+        <summary>${esc(c.step || c.node || "")}${c.error ? ' <span class="bad">失败</span>' : ""}</summary>
+        ${callCache.has(c.id) && openDetails.has(key) ? `<div class="body" data-loaded="1">${renderCall(callCache.get(c.id))}</div>`
+          : '<div class="body"><span class="muted">加载中…</span></div>'}</details></td>
+      <td class="muted">${c.secs != null ? dur(Math.round(c.secs)) : ""}</td><td class="muted">${tok}</td></tr>`;
+  }).join("");
+
   const info = [
     g.intent ? `<div><span class="muted">意图：</span>${esc(g.intent)}</div>` : "",
     g.lint_new != null ? `<div><span class="muted">golangci-lint 新引入：</span>${g.lint_new} 条</div>` : "",
@@ -365,10 +432,12 @@ function renderJob(d) {
       <table><tr><th></th><th>文件</th><th>候选</th><th>用时</th></tr>${fileRows}</table></div>` : ""}
     <div class="card"><h2>该 MR 的问题（${d.findings.length}）</h2>
       ${d.findings.length ? `<table><tr><th>级别</th><th>状态</th><th>位置</th><th>问题</th></tr>${findings}</table>` : '<div class="muted">暂无</div>'}</div>
+    <div class="card"><h2>模型调用（${calls.length}）</h2>
+      ${calls.length ? `<table class="calls"><tr><th>时间</th><th>步骤（点击查看 prompt 与回复）</th><th>用时</th><th>tokens 入→出</th></tr>${callRows}</table>`
+        : '<div class="muted">暂无记录（开启记录之后的调用才会出现）</div>'}</div>
     ${p.warnings && p.warnings.length ? `<div class="card"><h2>警告（${p.warnings.length}）</h2><pre>${p.warnings.map(esc).join("\n")}</pre></div>` : ""}
     <div class="card"><h2>日志</h2><pre class="log" id="log">${(p.lines || []).map(esc).join("\n") || "（日志中没有这个任务的记录）"}</pre></div>`;
-  document.querySelectorAll("details[data-key]").forEach(el =>
-    el.addEventListener("toggle", () => el.open ? openDetails.add(el.dataset.key) : openDetails.delete(el.dataset.key)));
+  bindDetails(document.getElementById("main"));
   const lg = document.getElementById("log"); lg.scrollTop = lg.scrollHeight;
 }
 
@@ -377,7 +446,8 @@ async function refresh() {
     renderOverview(await get("/api/overview"));
     if (selected != null) {
       const d = await get("/api/job?id=" + selected);
-      if (!d.error) renderJob(d);
+      const raw = JSON.stringify(d);
+      if (!d.error && raw !== lastJobRaw) { lastJobRaw = raw; renderJob(d); }
     } else {
       document.getElementById("main").innerHTML = '<div class="empty">暂无任务</div>';
     }

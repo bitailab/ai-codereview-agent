@@ -17,6 +17,7 @@ from ..llm import (
     with_think_mode,
 )
 from ..static_analysis import run_golangci
+from ..trace import set_step
 from . import render as R
 from .context_pack import build_context_pack
 from .gate import compute_conclusion
@@ -211,6 +212,7 @@ class Nodes:
 
         intent = state["mr"]["title"] or ""
         if files:
+            set_step("MR 意图摘要")
             try:
                 intent = invoke_text([human(render(
                     "intent", title=state["mr"]["title"], description=(state["mr"]["description"] or "")[:3000],
@@ -260,6 +262,8 @@ class Nodes:
             log.warning("context pack 失败: %s", e)
             context_pack = "（无）"
 
+        chunk = f" ({f['chunk']}/{f['chunks']})" if f.get("chunks", 1) > 1 else ""
+        set_step(f"理解 {f['path']}{chunk}")
         understanding = self._understand(payload, f, context_pack, mirror, head)
 
         known = [x for x in payload.get("findings", []) if x["file"] == f["path"]]
@@ -277,6 +281,7 @@ class Nodes:
         passes = ["all"] if len(cfg.passes) > 1 and is_ignored(f["path"], cfg.light_files) else cfg.passes
         for pass_key in passes:
             name, checklist = PASS_CHECKLISTS.get(pass_key, PASS_CHECKLISTS["all"])
+            set_step(f"审查 {f['path']}{chunk} [{pass_key}]")
             # review_pass.md 把各轮相同的内容（规范、理解、diff）放在前面，随轮次变化的清单和已知问题放在末尾，
             # 这样后几轮能复用模型服务对公共前缀的 KV 缓存，只需处理末尾几百个 token
             msg = render(
@@ -465,6 +470,7 @@ class Nodes:
                     code=_code_window(mirror.show(head, f["file"]), f["line"]),
                     diff=fd.annotated() if fd else "",
                 )
+                set_step(f"复核 {f['file']} L{f['line']} {f['title']}")
                 verdicts = self._verify_votes(msg, votes)
                 # P0 不对称处理：首轮判为误报时再投一票，全部判误报才丢弃，避免一次误判漏掉阻断问题
                 if f["severity"] == "P0" and verdicts and not any(v.valid for v in verdicts):
@@ -544,6 +550,7 @@ class Nodes:
             title=f["title"], detail=f["detail"], evidence=f["evidence"], developer_note=developer_note or "（无）",
             diff=diff[:30000], code=_code_window(content, loc or f.get("line")),
         )
+        set_step(f"修复验证 {f['file']} L{f.get('line')} {f['title']}")
         try:
             check = invoke_structured(FixCheck, [self._sys(), human(msg)], role="verify")
             if check.status == "fixed" and f["severity"] in ("P0", "P1"):
