@@ -30,6 +30,7 @@ TOTAL_RE = re.compile(r"待审 (\d+) 个文件块")
 AGG_RE = re.compile(r"聚合：新问题 (\d+) 条，丢弃 (\d+) 条")
 DONE_RE = re.compile(r"发布完成，结论 (\w+)")
 SKIP_RE = re.compile(r"状态为 (\w+)，跳过")
+RESUME_RE = re.compile(r"从 checkpoint 恢复任务")
 
 
 def _read_log_lines(path: Path) -> list[str]:
@@ -69,6 +70,9 @@ def parse_job_log(lines: list[str], job_id: int) -> dict:
         msg = e["msg"]
         if m := TOTAL_RE.search(msg):
             out["total"] = int(m.group(1))
+            prev_ts = e["ts"]
+        elif RESUME_RE.search(msg):  # 从 checkpoint 恢复时不会重新规划，日志里没有“待审 N 个文件块”
+            out["resumed"] = True
             prev_ts = e["ts"]
         elif m := CHUNK_RE.match(msg):
             out["chunks"].append({"path": m.group(1), "chunk": int(m.group(2)), "chunks": int(m.group(3)),
@@ -142,6 +146,9 @@ class UI:
         pp, iid = job["project_path"], job["mr_iid"]
         prog = parse_job_log(_read_log_lines(self.log_path), job_id)
         gs = self._graph_state(job_id)
+        # 恢复执行的任务日志里没有规划阶段的标记，用 checkpoint 中待执行的节点判断当前阶段
+        if prog.get("found") and prog["phase"] in ("load", "plan") and "review_file" in gs.get("next", []):
+            prog["phase"] = "review"
         done = {(c["path"], c["chunk"]): c for c in prog.get("chunks", [])}
         planned = gs.get("files") or [{k: c[k] for k in ("path", "chunk", "chunks")} for c in prog.get("chunks", [])]
         files, current_marked = [], False

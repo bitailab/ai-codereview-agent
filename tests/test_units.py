@@ -242,3 +242,15 @@ def test_trace_records_call_with_step(tmp_path):
     assert [m["role"] for m in full["request"]["messages"]] == ["system", "human"]
     assert full["response"]["content"] == "确认的问题：无"
     assert r.calls("job-8") == [] and TraceReader(tmp_path / "missing.db").calls("job-7") == []
+
+
+def test_parse_job_log_resumed_job():
+    from ai_cr.ui import parse_job_log
+
+    lines = [
+        "2026-09-30 15:12:36,566 INFO ai_cr.worker: 处理任务 #13 new_push g/edgenode!9",
+        "2026-09-30 15:12:36,569 INFO ai_cr.worker: 从 checkpoint 恢复任务 #13",
+        "2026-09-30 15:14:36,879 INFO ai_cr.graph.nodes:   cmd/main.go (1/1): 4 条候选问题",
+    ]
+    p = parse_job_log(lines, 13)
+    assert p["resumed"] and p["chunks"][0]["since"] == "2026-09-30 15:12:36"
