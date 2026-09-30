@@ -51,7 +51,7 @@ uv run ai-cr review my-group/service-a 123 --dry-run         # 试跑，只打�
 uv run ai-cr review <project> <iid> --full                          # 立即审查并提交
 uv run ai-cr run                                                    # 常驻：轮询 + 处理
 uv run ai-cr status <project> <iid>                                 # 查看问题状态与审计日志
-uv run ai-cr ui [--port 8765]                                       # 本地状态页：任务队列、逐文件进度、问题列表
+uv run ai-cr ui [--port 8765]                                       # 本地状态页：任务队列、逐文件进度、问题列表、每次模型调用的 prompt 与回复
 ```
 
 **开机自启**：`./deploy/install.sh` 安装三个 launchd 任务（修改 `start-model.sh` 或 plist 后重新运行一次即可）：
