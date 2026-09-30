@@ -131,7 +131,10 @@ def _scan_discussions(deps: Deps, pp: str, iid: int) -> int:
                 count += store.enqueue(pp, iid, "dev_reply", payload, f"note:{n['id']}")
 
         # 讨论被人手动 resolve，而 AI 这边问题仍未关闭
-        if f and f["status"] in OPEN_STATES and notes and notes[0].get("resolved"):
+        # 已有该讨论的待处理任务（例如开发者回复“已修复”后顺手 resolve）时不再重复验证：那个任务会处理；
+        # 若它没有关闭问题、讨论仍是 resolved，下次扫描会再入队（key 相同，此前未入队过）
+        if f and f["status"] in OPEN_STATES and notes and notes[0].get("resolved") \
+                and not store.has_active_thread_job(pp, iid, d["id"]):
             by = (notes[0].get("resolved_by") or {}).get("username")
             key = f"resolve:{d['id']}:{notes[0].get('resolved_at') or ''}"
             base = {"fingerprint": f["fingerprint"], "discussion_id": d["id"], "author": by}

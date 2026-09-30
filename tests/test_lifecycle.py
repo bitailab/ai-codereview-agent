@@ -314,3 +314,28 @@ def test_test_file_findings_capped_and_use_test_checklist(env, monkeypatch):
     assert f["severity"] == "P2"  # 模型报 P0、复核也说 P0，测试文件仍按 P2
     assert any("【本轮检查清单：测试代码质量】" in p for p in prompts)
     assert env.llm.vote_calls == 1 and s["conclusion"] != "REQUEST_CHANGES"
+
+
+def test_resolve_right_after_reply_is_not_verified_twice(env):
+    from ai_cr.poller import _scan_discussions
+
+    run(env, "new_push")
+    f = env.deps.store.findings(PP, 7)[0]
+    did = f["discussion_id"]
+    notes = [
+        {"id": 1, "system": False, "author": {"username": "ai-bot"}, "body": "<!-- ai-cr:finding=x --> 问题",
+         "resolved": True, "resolved_by": {"username": "dev"}, "resolved_at": "2026-09-30T11:04:14Z"},
+        {"id": 2, "system": False, "author": {"username": "dev"}, "body": "已在新推送中修复"},
+    ]
+    env.gl.discussions = lambda pp, iid: [{"id": did, "notes": notes}]
+
+    # 同一轮扫描：回复“已修复”并 resolve → 只入队回复任务
+    assert _scan_discussions(env.deps, PP, 7) == 1
+    job = env.deps.store.next_job()
+    assert job["kind"] == "dev_reply" and job["payload"]["note_id"] == 2
+    assert _scan_discussions(env.deps, PP, 7) == 0  # 回复任务仍在执行中
+
+    # 回复任务结束后问题仍未关闭、讨论仍是 resolved → 这时才补做 resolve 验证
+    env.deps.store.finish_job(job["id"])
+    assert _scan_discussions(env.deps, PP, 7) == 1
+    assert env.deps.store.next_job()["payload"]["note_body"] == "（开发者直接 resolve 了该讨论）"

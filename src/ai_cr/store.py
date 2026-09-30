@@ -168,6 +168,14 @@ class Store:
     def requeue_job(self, job_id: int) -> None:
         self._exec("UPDATE jobs SET status='pending', updated_at=? WHERE id=?", (now(), job_id))
 
+    def has_active_thread_job(self, project_path: str, mr_iid: int, discussion_id: str) -> bool:
+        """该讨论是否已有排队中或执行中的任务（开发者回复、人工命令等）。"""
+        return self._exec(
+            "SELECT 1 FROM jobs WHERE project_path=? AND mr_iid=? AND status IN ('pending','running')"
+            " AND json_extract(payload, '$.discussion_id')=? LIMIT 1",
+            (project_path, mr_iid, discussion_id),
+        ).fetchone() is not None
+
     # ---------------- mr_state ----------------
     def mr_state(self, project_path: str, mr_iid: int) -> dict:
         row = self._exec(
