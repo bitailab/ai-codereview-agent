@@ -372,3 +372,29 @@ def test_rephrased_report_of_just_fixed_issue_is_verified_against_fix(env, monke
     # 复核看到了同一文件刚判定修复的问题及其结论
     assert len(verify_prompts) == 1 and f"{old['title']}（FIXED）：已使用互斥锁保护写入" in verify_prompts[0]
     assert s["conclusion"] == "APPROVE"
+
+
+def test_reviewing_notice_then_result_in_same_note(env):
+    bodies = []
+    orig = env.gl.upsert_note
+    env.gl.upsert_note = lambda pp, iid, note_id, body: bodies.append((note_id, body)) or orig(pp, iid, note_id, body)
+    run(env, "new_push")
+    assert "AI 正在审查" in bodies[0][1] and "1 个文件块" in bodies[0][1]
+    assert bodies[-1][0] == 1 and "AI 正在审查" not in bodies[-1][1]  # 审查结果原地覆盖同一条评论
+    assert len({nid or 1 for nid, _ in bodies}) == 1
+
+
+def test_dry_run_posts_no_reviewing_notice(env):
+    env.graph.invoke({"event": {"kind": "new_push", "project_path": PP, "mr_iid": 7}, "dry_run": True, "full": True})
+    assert env.gl.notes == {}
+
+
+def test_failed_review_replaces_reviewing_notice(env, monkeypatch):
+    from ai_cr import worker
+
+    env.deps.store.update_mr_state(PP, 7, summary_note_id=1)
+    env.gl.notes[1] = "AI 正在审查 ..."
+    env.deps.store.enqueue(PP, 7, "new_push", {"head_sha": env.gl.head}, "push:x")
+    monkeypatch.setattr(worker, "run_job", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    worker.drain(env.deps, graph=None)
+    assert "未能完成" in env.gl.notes[1] and "AI 正在审查" not in env.gl.notes[1]

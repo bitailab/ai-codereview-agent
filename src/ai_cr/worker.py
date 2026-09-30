@@ -12,6 +12,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from .deps import Deps
 from .graph.build import build_graph
+from .graph.render import review_failed_body
 from .llm import is_unavailable, model_ready
 from .poller import poll_once
 
@@ -50,6 +51,21 @@ def drain(deps: Deps, graph) -> None:
                 return
             log.exception("任务 #%s 失败", job["id"])
             deps.store.finish_job(job["id"], error=str(e)[:2000])
+            if job["kind"] == "new_push":
+                _mark_review_failed(deps, job)
+
+
+def _mark_review_failed(deps: Deps, job: dict) -> None:
+    """审查开始时汇总评论被改成了“正在审查”，失败后要改掉，否则会一直显示审查中。"""
+    pp, iid = job["project_path"], job["mr_iid"]
+    note_id = deps.store.mr_state(pp, iid).get("summary_note_id")
+    if not note_id:
+        return
+    try:
+        body = review_failed_body(job["payload"].get("head_sha") or "", deps.store.last_summary(pp, iid))
+        deps.gl.upsert_note(pp, iid, note_id, body)
+    except Exception as e:  # noqa: BLE001
+        log.warning("更新审查失败提示失败: %s", e)
 
 
 def keep_awake() -> None:

@@ -7,6 +7,7 @@ from ..gitlab_client import BOT_MARKER, SUMMARY_MARKER, finding_marker
 from .gate import is_blocking
 
 SEV_ICON = {"P0": "🔴 P0", "P1": "🟠 P1", "P2": "🔵 P2"}
+MINUTES_PER_CHUNK = 1.7  # 实测（Qwen3.6 GGUF，48GB M4 Pro）：40 个文件块约 70 分钟，含复核
 CAT_NAME = {
     "bug": "逻辑缺陷", "concurrency": "并发", "performance": "性能", "security": "安全",
     "resource": "资源泄漏", "error_handling": "错误处理", "style": "风格", "lint": "静态检查",
@@ -121,8 +122,37 @@ def pipeline_notice_body(head_sha: str, pipeline: dict, previous_summary: str | 
          else "流水线正在重新运行，通过后会自动开始 AI 代码审查。")
         + "如需跳过等待，可在 MR 下评论 `/ai-review`。",
     ]
-    if previous_summary:
-        prev = previous_summary.replace(SUMMARY_MARKER, "").replace(BOT_MARKER, "").strip()
-        prev = prev.replace("### 🤖 AI Code Review", "").strip()
-        lines += ["", "---", "", "<details><summary>上一轮审查结果</summary>", "", prev, "", "</details>"]
-    return "\n".join(lines)
+    return "\n".join(lines + _previous_summary(previous_summary))
+
+
+def reviewing_notice_body(head_sha: str, chunks: int, previous_summary: str | None) -> str:
+    """审查开始时的汇总评论：提示正在审查 + 保留上一轮的审查结果，审查完成后被结果覆盖。"""
+    minutes = max(1, round(chunks * MINUTES_PER_CHUNK))
+    lines = [
+        SUMMARY_MARKER,
+        BOT_MARKER,
+        "### 🤖 AI Code Review",
+        "",
+        f"🔍 **AI 正在审查** 当前版本 `{head_sha[:8]}`（{chunks} 个文件块，预计约 {minutes} 分钟）。"
+        "审查完成后本条评论会更新为审查结果。",
+    ]
+    return "\n".join(lines + _previous_summary(previous_summary))
+
+
+def review_failed_body(head_sha: str, previous_summary: str | None) -> str:
+    lines = [
+        SUMMARY_MARKER,
+        BOT_MARKER,
+        "### 🤖 AI Code Review",
+        "",
+        f"⚠️ 当前版本 `{head_sha[:8]}` 的 AI 审查**未能完成**，会在下次推送时重试；如需立即重试，可在 MR 下评论 `/ai-review`。",
+    ]
+    return "\n".join(lines + _previous_summary(previous_summary))
+
+
+def _previous_summary(previous_summary: str | None) -> list[str]:
+    if not previous_summary:
+        return []
+    prev = previous_summary.replace(SUMMARY_MARKER, "").replace(BOT_MARKER, "").strip()
+    prev = prev.replace("### 🤖 AI Code Review", "").strip()
+    return ["", "---", "", "<details><summary>上一轮审查结果</summary>", "", prev, "", "</details>"]

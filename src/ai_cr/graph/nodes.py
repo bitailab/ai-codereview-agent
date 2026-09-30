@@ -229,6 +229,8 @@ class Nodes:
             groups = fd.chunks(cfg.max_chunk_chars)
             for i, hunks in enumerate(groups):
                 files.append({"path": fd.path, "diff": fd.annotated(hunks), "chunk": i + 1, "chunks": len(groups)})
+        if files and not state.get("dry_run"):
+            self._post_reviewing_notice(pp, iid, head, len(files))
 
         intent = state["mr"]["title"] or ""
         if files:
@@ -267,6 +269,16 @@ class Nodes:
             f["static_hints"] = "\n".join(hints.get(f["path"], [])) or "（无）"
         log.info("%s!%s 待审 %d 个文件块", pp, iid, len(files))
         return {"files": files, "intent": intent, "notes": notes, "lint_issues": lint_issues}
+
+    def _post_reviewing_notice(self, pp: str, iid: int, head: str, chunks: int) -> None:
+        """在汇总评论里提示“正在审查”（原地编辑，不产生新通知），审查完成后由 publish 覆盖为结果。"""
+        store = self.d.store
+        try:
+            body = R.reviewing_notice_body(head, chunks, store.last_summary(pp, iid))
+            note_id = self.d.gl.upsert_note(pp, iid, store.mr_state(pp, iid).get("summary_note_id"), body)
+            store.update_mr_state(pp, iid, summary_note_id=note_id)
+        except Exception as e:  # noqa: BLE001 提示失败不影响审查
+            log.warning("发布“审查中”提示失败: %s", e)
 
     def review_file(self, payload: dict) -> dict:
         """单个文件块：先理解（可调用工具），再按维度逐轮审查。"""
