@@ -61,7 +61,17 @@ PASS_CHECKLISTS = {
         "- 资源释放、错误处理、超时与取消\n"
         "- 安全（注入、越权、敏感信息）、性能（循环 IO、复杂度、内存）",
     ),
+    "test": (
+        "测试代码质量",
+        "- 测试是否真的覆盖了它声称的场景：调用的函数/参数/配置与用例名和断言意图是否一致，断言是否恒真或缺失\n"
+        "- 不稳定（flaky）：依赖 time.Sleep 等待异步结果、goroutine 无同步、t.Parallel 下共享可变状态、依赖执行顺序或外部环境\n"
+        "- 资源与 goroutine 泄漏：Server/连接/临时文件未关闭，缺少 t.Cleanup / defer\n"
+        "- 错误被忽略导致测试在失败时仍然通过（例如忽略 setup 的 err）\n"
+        "不要报：测试中的硬编码值、魔法数字、性能、安全（测试代码不上线）；只在单线程中执行的代码不存在并发问题",
+    ),
 }
+# 测试代码出问题不会影响线上，其问题最高按 P2 处理，不阻断 MR
+TEST_MAX_SEVERITY = "P2"
 
 # 生成代码的标准标记（https://go.dev/s/generatedcode，protoc/mockgen/stringer 等都遵循）
 GENERATED_RE = re.compile(r"^// Code generated .* DO NOT EDIT\.$", re.M)
@@ -278,7 +288,12 @@ class Nodes:
             )
 
         out: list[dict] = []
-        passes = ["all"] if len(cfg.passes) > 1 and is_ignored(f["path"], cfg.light_files) else cfg.passes
+        if is_ignored(f["path"], cfg.test_files):
+            passes = ["test"]
+        elif len(cfg.passes) > 1 and is_ignored(f["path"], cfg.light_files):
+            passes = ["all"]
+        else:
+            passes = cfg.passes
         for pass_key in passes:
             name, checklist = PASS_CHECKLISTS.get(pass_key, PASS_CHECKLISTS["all"])
             set_step(f"审查 {f['path']}{chunk} [{pass_key}]")
@@ -369,6 +384,7 @@ class Nodes:
         cache: dict[str, str | None] = {}
         for r in state.get("raw_findings", []):
             path = r["file"]
+            self._cap_test_severity(r)  # 在复核之前降级，测试文件的问题不会走 P0 的复核规则
             if path not in cache:
                 cache[path] = mirror.show(head, path)
             content = cache[path]
@@ -421,7 +437,7 @@ class Nodes:
                 continue
             fd = pos_diffs.get(li["file"])
             inline = bool(fd and fd.position_for(li["line"]))  # 死代码等问题常落在未改动行上，此时以普通讨论发布
-            out.append({
+            out.append(self._cap_test_severity({
                 "file": li["file"], "line": li["line"], "end_line": None,
                 "severity": sev_map.get(li["linter"], sev_map.get("default", "P2")), "category": "lint",
                 "title": f"[{li['linter']}] {li['text']}",
@@ -429,7 +445,7 @@ class Nodes:
                 "evidence": li.get("source_line") or "", "suggestion": None,
                 "fingerprint": li["fingerprint"], "inline": inline, "status": "NEW", "source": "lint",
                 "passes": ["lint"],
-            })
+            }))
         return out
 
     @staticmethod
@@ -458,11 +474,12 @@ class Nodes:
                 result.append(f)
                 continue
             consensus = len(f.get("passes") or [])
+            p0 = f["severity"] == "P0"
             if f.get("source") == "lint":
                 pass  # 静态分析结论是确定的，不需要模型复核
-            elif consensus >= 2:
+            elif consensus >= 2 and not p0:
                 log.info("多轮共识（%d 轮），跳过复核: %s L%s %s", consensus, f["file"], f["line"], f["title"])
-            else:  # 只被一轮报出的问题（不论级别）都要复核
+            else:  # 只被一轮报出的问题都要复核；P0 会阻断 MR，即使多轮共识也要复核
                 fd = diffs.get(f["file"])
                 msg = render(
                     "verify", file=f["file"], line=f["line"], severity=f["severity"], category=f["category"],
@@ -471,17 +488,20 @@ class Nodes:
                     diff=fd.annotated() if fd else "",
                 )
                 set_step(f"复核 {f['file']} L{f['line']} {f['title']}")
-                verdicts = self._verify_votes(msg, votes)
-                # P0 不对称处理：首轮判为误报时再投一票，全部判误报才丢弃，避免一次误判漏掉阻断问题
-                if f["severity"] == "P0" and verdicts and not any(v.valid for v in verdicts):
-                    verdicts += self._verify_votes(msg, 1, temperature=0.4)
+                if p0:
+                    # P0 多数票：先投两票，意见不一致再加第三票。单票放行曾让两个误报 P0 阻断了 MR
+                    verdicts = self._verify_votes(msg, max(2, votes), temperature=0.3)
+                    if len(verdicts) == 2 and verdicts[0].valid != verdicts[1].valid:
+                        verdicts += self._verify_votes(msg, 1, temperature=0.4)
+                else:
+                    verdicts = self._verify_votes(msg, votes)
                 if verdicts:
-                    valid = sum(v.valid for v in verdicts) * 2 > len(verdicts) if f["severity"] != "P0" \
-                        else any(v.valid for v in verdicts)
-                    if not valid:
-                        log.info("复核判定误报，丢弃: %s L%s %s（%s）", f["file"], f["line"], f["title"], verdicts[0].reason)
+                    if sum(v.valid for v in verdicts) * 2 <= len(verdicts):
+                        log.info("复核判定误报，丢弃: %s L%s %s（%d/%d 票成立；%s）", f["file"], f["line"], f["title"],
+                                 sum(v.valid for v in verdicts), len(verdicts), next(v for v in verdicts if not v.valid).reason)
                         continue
                     f["severity"] = Counter(v.severity for v in verdicts if v.valid).most_common(1)[0][0]
+                    self._cap_test_severity(f)  # 复核模型可能把级别调回 P0/P1
             f |= {"status": "OPEN", "first_sha": head, "last_checked_sha": head, "dispute_rounds": 0}
             result.append(f)
             actions.append({"kind": "create", "fingerprint": f["fingerprint"]})
@@ -598,7 +618,12 @@ class Nodes:
             "last_checked_sha": head, "dispute_rounds": 0, "parent_fingerprint": parent,
             "fingerprint": fingerprint(d["file"], d["category"], d["evidence"], d["title"]),
         }
-        return d
+        return self._cap_test_severity(d)
+
+    def _cap_test_severity(self, f: dict) -> dict:
+        if ORDER[f["severity"]] < ORDER[TEST_MAX_SEVERITY] and is_ignored(f["file"], self.d.cfg.review.test_files):
+            f["severity"] = TEST_MAX_SEVERITY
+        return f
 
     @staticmethod
     def _close(f: dict, status: str, text: str, resolve: bool) -> tuple[dict, list[dict]]:

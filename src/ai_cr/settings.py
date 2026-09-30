@@ -49,9 +49,11 @@ class ReviewConfig(BaseModel):
     max_files: int = 40
     max_chunk_chars: int = 48000
     passes: list[str] = Field(default_factory=lambda: ["correctness", "robustness", "security_performance"])
-    # 测试、配置、接口定义等文件出严重问题的概率低，只做一轮合并审查（all），把时间留给核心代码
+    # 测试文件：只做一轮测试专用清单的审查，问题最高 P2（不阻断 MR）
+    test_files: list[str] = Field(default_factory=lambda: ["*_test.go", "*.test.*", "*.spec.*", "test_*.py", "*_test.py"])
+    # 配置、接口定义等文件出严重问题的概率低，只做一轮合并审查（all），把时间留给核心代码
     light_files: list[str] = Field(default_factory=lambda: [
-        "*_test.go", "*.test.*", "*.spec.*", "*.proto", "*.yaml", "*.yml", "*.json", "*.toml",
+        "*.proto", "*.yaml", "*.yml", "*.json", "*.toml",
         "*.md", "*.html", "*.css", "*.sql",
     ])
     enable_tools: bool = True

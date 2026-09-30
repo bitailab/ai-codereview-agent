@@ -117,7 +117,7 @@ def env(tmp_path, monkeypatch):
     settings = Settings(env=Env(gitlab_url="http://x", gitlab_token="t"), config=cfg)
     deps = Deps(settings=settings, store=Store(cfg.data_path / "state.db"), gl=gl)
 
-    llm = SimpleNamespace(dispute="maintain", fix="fixed")
+    llm = SimpleNamespace(dispute="maintain", fix="fixed", votes=[], vote_calls=0)  # votes：依次返回的复核结论
 
     def fake_structured(schema, messages, role="review", temperature=None):
         if schema is FindingList:
@@ -126,7 +126,9 @@ def env(tmp_path, monkeypatch):
                 detail="goroutine 中无锁写全局 map，与 Get 并发时触发 fatal error。",
                 evidence="cache[k] = v", suggestion="使用 sync.Mutex 保护。")])
         if schema is VerifyVerdict:
-            return VerifyVerdict(analysis="", valid=True, severity="P0", reason="确实无锁")
+            llm.vote_calls += 1
+            valid = llm.votes.pop(0) if llm.votes else True
+            return VerifyVerdict(analysis="", valid=valid, severity="P0", reason="确实无锁" if valid else "不会并发")
         if schema is ReplyIntent:
             return ReplyIntent(intent="dispute", summary="开发者认为不会并发")
         if schema is DisputeVerdict:
@@ -285,3 +287,30 @@ def test_lint_findings_lifecycle(env, monkeypatch):
     assert env.gl.resolved[by_title["[errcheck] Error return value is not checked"]["discussion_id"]] is True
     assert by_title["[unused] var cache is unused"]["status"] == "OPEN"
     assert s["conclusion"] == "COMMENT"
+
+
+def test_p0_needs_majority_of_votes(env):
+    # 两票分歧 → 第三票判误报 → 2/3 认为不成立，丢弃，不阻断
+    env.llm.votes = [True, False, False]
+    s = run(env, "new_push")
+    assert env.llm.vote_calls == 3
+    assert env.deps.store.findings(PP, 7) == [] and s["conclusion"] != "REQUEST_CHANGES"
+
+
+def test_p0_kept_when_two_votes_agree(env):
+    env.llm.votes = [True, True]
+    s = run(env, "new_push")
+    assert env.llm.vote_calls == 2  # 两票一致就不再投第三票
+    [f] = env.deps.store.findings(PP, 7)
+    assert f["severity"] == "P0" and s["conclusion"] == "REQUEST_CHANGES"
+
+
+def test_test_file_findings_capped_and_use_test_checklist(env, monkeypatch):
+    env.deps.cfg.review.test_files = ["svc.go"]  # 把被审文件当作测试文件
+    prompts = []
+    monkeypatch.setattr(nodes_mod, "invoke_text", lambda messages, role="review": prompts.append(messages[-1].content) or "理解/意图")
+    s = run(env, "new_push")
+    [f] = env.deps.store.findings(PP, 7)
+    assert f["severity"] == "P2"  # 模型报 P0、复核也说 P0，测试文件仍按 P2
+    assert any("【本轮检查清单：测试代码质量】" in p for p in prompts)
+    assert env.llm.vote_calls == 1 and s["conclusion"] != "REQUEST_CHANGES"

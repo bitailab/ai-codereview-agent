@@ -21,10 +21,11 @@ review:
     - correctness
     - robustness
     - security_performance
-  # light_files: ["*_test.go", "*.proto", "*.yaml", ...]  # 这些文件只做一轮合并审查（默认值见 settings.py）
+  # light_files: ["*.proto", "*.yaml", ...]  # 这些文件只做一轮合并审查（默认值见 settings.py）
   enable_tools: true        # 理解阶段允许模型调用 read_file/grep/list_dir
   max_tool_steps: 6
-  verify_votes: 1           # P0/P1 复核投票次数（奇数）
+  verify_votes: 1           # 复核投票次数（奇数）。P0 固定多数票：先投两票，分歧时加第三票；P0 即使多轮共识也要复核
+  # test_files: ["*_test.go", "*.test.*", ...]  # 测试文件只用测试专用清单审一轮，问题最高 P2，不阻断 MR
   static_analysis:
     enabled: true             # golangci-lint：base/head 各跑一次，只报本次 MR 新引入的问题
     golangci_lint:            # 为空时依次查找 ~/.local/share/ai-cr/bin/golangci-lint、PATH（需与仓库 Go 版本匹配）
