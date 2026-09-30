@@ -254,3 +254,14 @@ def test_parse_job_log_resumed_job():
     ]
     p = parse_job_log(lines, 13)
     assert p["resumed"] and p["chunks"][0]["since"] == "2026-09-30 15:12:36"
+
+
+def test_match_keeps_distinct_issues_on_same_line_apart():
+    from ai_cr.graph.nodes import Nodes
+
+    ignored = {"fingerprint": "a", "file": "s.go", "line": 9, "category": "error_handling", "title": "db.Exec 错误被忽略"}
+    nil_db = {"fingerprint": "b", "file": "s.go", "line": 9, "category": "nil", "title": "db 未判空导致 panic"}
+    lint = {"fingerprint": "c", "file": "s.go", "line": 9, "category": "lint", "title": "[errcheck] ...", "source": "lint"}
+    assert Nodes._match(nil_db, [ignored], cross_category=False) is None  # 本轮新问题：不同类别分开保留
+    assert Nodes._match(nil_db, [ignored]) == 0                           # 与已有问题比较：仍宽松去重
+    assert Nodes._match(ignored, [lint], cross_category=False) == 0       # 模型重复报告 lint 问题仍会并入

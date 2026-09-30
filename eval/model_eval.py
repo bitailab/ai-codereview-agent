@@ -78,9 +78,11 @@ def record(name, **kw):
 
 
 # ---------- 合成审查用例 ----------
+# EVAL_REPS=S5=3,S4=2 可以临时增加某些用例的重复次数
+REPS = dict((k, int(v)) for k, v in (x.split("=") for x in os.environ.get("EVAL_REPS", "").split(",") if x))
 for name, base, head, reps in [("S1", T.BASE, T.BUGGY, 2), ("S2", CLEAN_BASE, CLEAN, 2),
                                ("S3", S3_BASE, S3, 1), ("S4", S4_BASE, S4, 1), ("S5", S5_BASE, S5, 1)]:
-    for i in range(reps):
+    for i in range(REPS.get(name, reps)):
         e = make_env(base, head)
         t = time.time()
         invoke(e, "new_push")

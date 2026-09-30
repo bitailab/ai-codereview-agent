@@ -35,8 +35,9 @@ PASS_CHECKLISTS = {
     "correctness": (
         "逻辑正确性与并发安全",
         "- 逻辑是否与 MR 意图一致；条件判断、边界值、off-by-one、错误的变量\n"
-        "- nil / 空指针 / 空切片 / 越界访问导致 panic；尤其是 map 查找、类型断言、函数返回的指针"
-        "在未判空（`v, ok :=` / `!= nil`）的情况下直接解引用，例如 `m[k].Field`\n"
+        "- nil / 空指针 / 越界访问导致 panic：只在代码中能看到 nil 的来源时才报——map 查找未命中、"
+        "不带 ok 的类型断言、明确可能返回 nil 的函数、错误分支中仍为 nil 的变量。"
+        "函数参数没有判空不算问题，除非 diff 中能看到调用方会传入 nil\n"
         "- 并发：共享变量（map、slice、结构体字段）是否在无锁情况下被多个 goroutine 读写；锁的粒度与顺序是否会死锁；"
         "channel 是否可能阻塞或重复关闭；循环变量被 goroutine 捕获\n"
         "- 数据一致性：先写后读、事务边界、重试导致的重复写入",
@@ -413,7 +414,9 @@ class Nodes:
             r["fingerprint"] = fingerprint(path, r["category"], r["evidence"], r["title"])
             if self._match(r, existing) is not None:
                 continue
-            i = self._match(r, new)
+            # 本轮新问题之间不跨类别合并：同一行上的“忽略错误”和“参数可能为 nil”是两个问题，
+            # 合并后只留更严重的那条，真问题会被推测性的 P0 吞掉，还会被误算成多轮共识
+            i = self._match(r, new, cross_category=False)
             if i is not None:
                 # 多轮独立报告同一处：记为共识票数，保留更严重的描述
                 x = new[i]
@@ -449,13 +452,15 @@ class Nodes:
         return out
 
     @staticmethod
-    def _match(r: dict, pool: list[dict]) -> int | None:
-        """同一指纹；或同一文件中：相邻位置（同类 ±3 行 / 跨类 ±2 行），或标题相同且相距不超过 10 行。"""
+    def _match(r: dict, pool: list[dict], cross_category: bool = True) -> int | None:
+        """同一指纹；或同一文件中：相邻位置（同类 ±3 行 / 跨类 ±2 行），或标题相同且相距不超过 10 行。
+        cross_category=False 时跨类只在一方是 lint 结果时按位置合并（模型常把 lint 报过的问题再报一遍）。"""
         title = normalize_code(r.get("title", ""))
         for i, x in enumerate(pool):
             dist = abs((x.get("line") or 0) - (r.get("line") or 0))
+            near_any = dist <= 2 and (cross_category or "lint" in (x.get("source"), r.get("source")))
             if x["fingerprint"] == r["fingerprint"] or (x["file"] == r["file"] and (
-                dist <= 2 or (x["category"] == r["category"] and dist <= 3)
+                near_any or (x["category"] == r["category"] and dist <= 3)
                 or (dist <= 10 and normalize_code(x.get("title", "")) == title)
             )):
                 return i
