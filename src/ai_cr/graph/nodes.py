@@ -85,6 +85,15 @@ def is_generated(content: str | None) -> bool:
     return GENERATED_RE.search(content[:2000]) is not None or is_minified(content)
 
 
+def _finding_line(x: dict) -> str:
+    """已有问题的一行摘要；已关闭的附上关闭理由（例如修复验证的结论），供审查和复核参考。"""
+    line = f"- L{x.get('line')} [{x['severity']}] {x['title']}（{x['status']}）"
+    reason = re.sub(r"^\W*已验证修复（`?\w+`?）：", "", x.get("status_reason") or "").strip()
+    if x.get("status") in CLOSED_STATES and reason:
+        line += f"：{reason[:200]}"
+    return line
+
+
 def _path_affinity(a: str, b: str) -> int:
     """两个路径的相关度：同文件 > 共同目录层级越深越相关。sorted 是稳定的，相关度相同时保持最近优先。"""
     if a == b:
@@ -278,7 +287,7 @@ class Nodes:
         understanding = self._understand(payload, f, context_pack, mirror, head)
 
         known = [x for x in payload.get("findings", []) if x["file"] == f["path"]]
-        known_text = "\n".join(f"- L{x.get('line')} [{x['severity']}] {x['title']}（{x['status']}）" for x in known) or "（无）"
+        known_text = "\n".join(_finding_line(x) for x in known) or "（无）"
         # 同一文件、同一目录的误报例子最有参考价值，其次才是最近的
         fps = sorted(self.d.store.feedback(pp, "false_positive", 50),
                      key=lambda s: _path_affinity(s["finding"].get("file") or "", f["path"]), reverse=True)[:3]
@@ -480,9 +489,12 @@ class Nodes:
                 continue
             consensus = len(f.get("passes") or [])
             p0 = f["severity"] == "P0"
+            # 同一文件里已判定修复/撤回的问题：新问题可能只是换个说法重提，必须复核并让复核看到当时的结论
+            closed = [x for x in state["findings"] if x["file"] == f["file"] and x.get("status") in ("FIXED", "WITHDRAWN")]
+            skip_by_consensus = consensus >= 2 and not p0 and not closed
             if f.get("source") == "lint":
                 pass  # 静态分析结论是确定的，不需要模型复核
-            elif consensus >= 2 and not p0:
+            elif skip_by_consensus:
                 log.info("多轮共识（%d 轮），跳过复核: %s L%s %s", consensus, f["file"], f["line"], f["title"])
             else:  # 只被一轮报出的问题都要复核；P0 会阻断 MR，即使多轮共识也要复核
                 fd = diffs.get(f["file"])
@@ -491,6 +503,7 @@ class Nodes:
                     title=f["title"], detail=f["detail"], evidence=f["evidence"],
                     code=_code_window(mirror.show(head, f["file"]), f["line"]),
                     diff=fd.annotated() if fd else "",
+                    closed="\n".join(_finding_line(x) for x in closed) or "（无）",
                 )
                 set_step(f"复核 {f['file']} L{f['line']} {f['title']}")
                 if p0:

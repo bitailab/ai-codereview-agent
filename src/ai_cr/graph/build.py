@@ -36,11 +36,13 @@ def build_graph(deps: Deps, checkpointer=None):
         base = {k: state.get(k) for k in FANOUT_KEYS}
         return [Send("review_file", base | {"file": f}) for f in state["files"]]
 
-    g.add_conditional_edges("plan_review", fan_out, ["review_file", "aggregate"])
+    # 先验证已有问题是否修复，再审查新代码：审查时“已报告的问题”是最新状态，
+    # 复核新问题时也能看到同一文件刚判定修复的结论，避免把刚修好的问题换个说法重报
+    g.add_edge("plan_review", "verify_fixes")
+    g.add_conditional_edges("verify_fixes", fan_out, ["review_file", "aggregate"])
     g.add_edge("review_file", "aggregate")
     g.add_edge("aggregate", "verify")
-    g.add_edge("verify", "verify_fixes")
-    g.add_edge("verify_fixes", "gate")
+    g.add_edge("verify", "gate")
     g.add_edge("handle_reply", "gate")
     g.add_edge("human_command", "gate")
     g.add_edge("gate", "publish")

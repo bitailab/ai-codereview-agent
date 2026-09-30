@@ -339,3 +339,36 @@ def test_resolve_right_after_reply_is_not_verified_twice(env):
     env.deps.store.finish_job(job["id"])
     assert _scan_discussions(env.deps, PP, 7) == 1
     assert env.deps.store.next_job()["payload"]["note_body"] == "（开发者直接 resolve 了该讨论）"
+
+
+def test_rephrased_report_of_just_fixed_issue_is_verified_against_fix(env, monkeypatch):
+    run(env, "new_push")
+    [old] = env.deps.store.findings(PP, 7)
+
+    # 开发者修复；新一轮审查把同一问题换个说法、换个位置又报了一遍
+    git(env.origin, "checkout", "-q", "feat")
+    (env.origin / "svc.go").write_text(FIXED)
+    git(env.origin, "commit", "-qam", "fix")
+    env.gl.head = git(env.origin, "rev-parse", "HEAD")
+    git(env.origin, "update-ref", "refs/merge-requests/7/head", env.gl.head)
+
+    orig = nodes_mod.invoke_structured
+    verify_prompts = []
+
+    def fake(schema, messages, role="review", temperature=None):
+        if schema is FindingList:
+            return FindingList(analysis="", findings=[LLMFinding(
+                file="svc.go", line=3, severity="P1", category="resource", title="全局锁缺少清理导致资源问题",
+                detail="修复不完整", evidence="var mu sync.Mutex", suggestion="")])  # 与旧问题相距较远、类别不同
+        if schema is VerifyVerdict:
+            verify_prompts.append(messages[-1].content)
+            return VerifyVerdict(analysis="", valid=False, severity="P2", reason="只是重提已修复的问题")
+        return orig(schema, messages, role, temperature)
+
+    monkeypatch.setattr(nodes_mod, "invoke_structured", fake)
+    s = run(env, "new_push")
+    statuses = {f["title"]: f["status"] for f in env.deps.store.findings(PP, 7)}
+    assert statuses == {old["title"]: "FIXED"}  # 旧问题先被判定修复，重提的被复核丢弃
+    # 复核看到了同一文件刚判定修复的问题及其结论
+    assert len(verify_prompts) == 1 and f"{old['title']}（FIXED）：已使用互斥锁保护写入" in verify_prompts[0]
+    assert s["conclusion"] == "APPROVE"
