@@ -17,13 +17,14 @@ class Env(BaseSettings):
     gitlab_token: str
     llm_base_url: str = "http://127.0.0.1:1234/v1"
     llm_api_key: str = "local"
-    llm_model: str = "qwen3-coder-30b-a3b-instruct"
+    llm_model: str = "qwen3.6-35b-a3b-gguf-switch"
     llm_verify_model: str = ""
     llm_structured_mode: str = "json_schema"  # json_schema | text
     llm_temperature: float = 0.2
     llm_timeout: int = 900
     llm_max_tokens: int = 4096  # 单次输出上限，防止模型陷入重复生成
     llm_verify_max_tokens: int = 8192  # 复核类调用可开启思考，需要更大的输出空间
+    llm_context_tokens: int = 40960  # 模型加载时的上下文长度（与 deploy/start-model.sh 的 CTX 一致），用于控制工具调用结果的总量
     # 思考模式开关（需要模型支持在 system 中用 /no_think 关闭思考，例如 Qwen3.6 的 switch 变体；对不支持的模型无副作用）
     llm_review_no_think: bool = False
     llm_verify_no_think: bool = False
@@ -46,6 +47,11 @@ class ReviewConfig(BaseModel):
     max_files: int = 40
     max_chunk_chars: int = 48000
     passes: list[str] = Field(default_factory=lambda: ["correctness", "robustness", "security_performance"])
+    # 测试、配置、接口定义等文件出严重问题的概率低，只做一轮合并审查（all），把时间留给核心代码
+    light_files: list[str] = Field(default_factory=lambda: [
+        "*_test.go", "*.test.*", "*.spec.*", "*.proto", "*.yaml", "*.yml", "*.json", "*.toml",
+        "*.md", "*.html", "*.css", "*.sql",
+    ])
     enable_tools: bool = True
     max_tool_steps: int = 6
     verify_votes: int = 1

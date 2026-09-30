@@ -12,7 +12,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from .deps import Deps
 from .graph.build import build_graph
-from .llm import model_ready
+from .llm import is_unavailable, model_ready
 from .poller import poll_once
 
 log = logging.getLogger(__name__)
@@ -44,6 +44,10 @@ def drain(deps: Deps, graph) -> None:
             run_job(deps, graph, job, resume=True)
             deps.store.finish_job(job["id"])
         except Exception as e:  # noqa: BLE001
+            if is_unavailable(e):  # 模型中途被卸载/服务重启：放回队列，等模型就绪后从 checkpoint 继续
+                log.warning("任务 #%s 中断：模型不可用，放回队列（%s）", job["id"], str(e)[:200])
+                deps.store.requeue_job(job["id"])
+                return
             log.exception("任务 #%s 失败", job["id"])
             deps.store.finish_job(job["id"], error=str(e)[:2000])
 

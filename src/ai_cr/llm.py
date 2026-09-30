@@ -21,6 +21,37 @@ THINK_RE = re.compile(r"<think>.*?</think>", re.S)
 _SCHEMA_BROKEN: set[tuple[str, str]] = set()
 
 
+class ModelUnavailable(RuntimeError):
+    """模型服务不可用（被卸载、加载失败、连不上）。节点内不吞掉，由 worker 放回队列，就绪后从 checkpoint 继续。"""
+
+
+# LM Studio 在模型被卸载/加载失败时返回 400，只能按错误信息识别
+_DOWN_MARKERS = ("Model unloaded", "Failed to load model", "No models loaded", "model_not_found")
+
+
+def is_unavailable(e: BaseException) -> bool:
+    import openai
+
+    if isinstance(e, ModelUnavailable):
+        return True
+    # 超时是生成太慢，不是服务不可用；放回队列只会无限重试
+    if isinstance(e, openai.APIConnectionError) and not isinstance(e, openai.APITimeoutError):
+        return True
+    return any(m in str(e) for m in _DOWN_MARKERS)
+
+
+def raise_if_unavailable(e: Exception) -> None:
+    """放在 `except Exception` 的第一行：模型不可用时继续上抛，其他错误照旧由调用方降级处理。"""
+    if isinstance(e, ModelUnavailable):
+        raise e
+    if is_unavailable(e):
+        raise ModelUnavailable(str(e)[:300]) from e
+
+
+def estimate_tokens(messages: list[BaseMessage]) -> int:
+    return sum(len(str(m.content)) for m in messages) // 3  # 代码/diff 为主，约 3 字符一个 token
+
+
 @lru_cache
 def chat(role: str = "review", temperature: float | None = None) -> ChatOpenAI:
     env = get_settings().env
@@ -112,6 +143,7 @@ def invoke_structured(schema: type[T], messages: list[BaseMessage], role: str = 
             if isinstance(result, schema):
                 return result
         except Exception as e:  # noqa: BLE001 服务端不支持或输出不合法时降级
+            raise_if_unavailable(e)
             if "content=''" in str(e):
                 _SCHEMA_BROKEN.add(key)
                 log.warning("模型 %s 在 %s 角色下 json_schema 返回空内容，后续改用文本解析", *key)

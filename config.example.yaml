@@ -21,6 +21,7 @@ review:
     - correctness
     - robustness
     - security_performance
+  # light_files: ["*_test.go", "*.proto", "*.yaml", ...]  # 这些文件只做一轮合并审查（默认值见 settings.py）
   enable_tools: true        # 理解阶段允许模型调用 read_file/grep/list_dir
   max_tool_steps: 6
   verify_votes: 1           # P0/P1 复核投票次数（奇数）

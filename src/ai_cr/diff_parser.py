@@ -69,11 +69,11 @@ class FileDiff:
         return "\n".join(out)
 
     def chunks(self, max_chars: int) -> list[list[Hunk]]:
-        """按 hunk 切分，保证每块不超过 max_chars（单个超大 hunk 单独成块）。"""
+        """按 hunk 切分，保证每块不超过 max_chars（超大 hunk 先按行拆开，超长行截断）。"""
         groups: list[list[Hunk]] = []
         cur: list[Hunk] = []
         size = 0
-        for h in self.hunks:
+        for h in (part for big in self.hunks for part in _split_hunk(big, max_chars)):
             hs = sum(len(ln.text) + 10 for ln in h.lines) + len(h.header)
             if cur and size + hs > max_chars:
                 groups.append(cur)
@@ -84,6 +84,28 @@ class FileDiff:
             groups.append(cur)
         return groups
 
+
+MAX_LINE_CHARS = 1000
+
+
+def _split_hunk(h: Hunk, max_chars: int) -> list[Hunk]:
+    """超长行截断；超过 max_chars 的 hunk 按行拆成多个（行号标注在每行上，拆开不影响定位）。"""
+    lines = [
+        DiffLine(ln.kind, ln.old_no, ln.new_no, ln.text[:MAX_LINE_CHARS] + f" …（截断，原长 {len(ln.text)} 字符）")
+        if len(ln.text) > MAX_LINE_CHARS else ln
+        for ln in h.lines
+    ]
+    parts: list[Hunk] = []
+    cur = Hunk(h.header)
+    size = len(h.header)
+    for ln in lines:
+        if cur.lines and size + len(ln.text) + 10 > max_chars:
+            parts.append(cur)
+            cur, size = Hunk(h.header), len(h.header)
+        cur.lines.append(ln)
+        size += len(ln.text) + 10
+    parts.append(cur)
+    return parts
 
 def _strip_prefix(p: str) -> str:
     p = p.strip()

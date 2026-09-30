@@ -12,7 +12,10 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from ..deps import Deps
 from ..diff_parser import FileDiff
 from ..git_repo import clean_evidence, is_ignored, locate_evidence, locate_snippet, normalize_code
-from ..llm import chat, clean_text, human, invoke_structured, invoke_text, render, system, with_think_mode
+from ..llm import (
+    chat, clean_text, estimate_tokens, human, invoke_structured, invoke_text, raise_if_unavailable, render, system,
+    with_think_mode,
+)
 from ..static_analysis import run_golangci
 from . import render as R
 from .context_pack import build_context_pack
@@ -31,7 +34,8 @@ PASS_CHECKLISTS = {
     "correctness": (
         "逻辑正确性与并发安全",
         "- 逻辑是否与 MR 意图一致；条件判断、边界值、off-by-one、错误的变量\n"
-        "- nil / 空指针 / 空切片 / 越界访问导致 panic\n"
+        "- nil / 空指针 / 空切片 / 越界访问导致 panic；尤其是 map 查找、类型断言、函数返回的指针"
+        "在未判空（`v, ok :=` / `!= nil`）的情况下直接解引用，例如 `m[k].Field`\n"
         "- 并发：共享变量（map、slice、结构体字段）是否在无锁情况下被多个 goroutine 读写；锁的粒度与顺序是否会死锁；"
         "channel 是否可能阻塞或重复关闭；循环变量被 goroutine 捕获\n"
         "- 数据一致性：先写后读、事务边界、重试导致的重复写入",
@@ -63,8 +67,26 @@ GENERATED_RE = re.compile(r"^// Code generated .* DO NOT EDIT\.$", re.M)
 
 
 def is_generated(content: str | None) -> bool:
-    """文件头部（package 声明之前的注释区）带生成标记。"""
-    return bool(content) and GENERATED_RE.search(content[:2000]) is not None
+    """文件头部（package 声明之前的注释区）带生成标记，或是压缩/混淆过的产物（例如打包后的 JS）。"""
+    if not content:
+        return False
+    return GENERATED_RE.search(content[:2000]) is not None or is_minified(content)
+
+
+def _path_affinity(a: str, b: str) -> int:
+    """两个路径的相关度：同文件 > 共同目录层级越深越相关。sorted 是稳定的，相关度相同时保持最近优先。"""
+    if a == b:
+        return 1000
+    n = 0
+    for x, y in zip(a.split("/")[:-1], b.split("/")[:-1]):
+        if x != y:
+            break
+        n += 1
+    return n
+
+def is_minified(content: str) -> bool:
+    # 手写代码几乎不会有上千字符的行；压缩/混淆的 JS 常常整个文件只有一行，按 token 计比字符数更膨胀，会撑爆上下文
+    return any(len(line) > 2000 for line in content.splitlines())
 
 
 DISPUTE_WORDS = ("误报", "不是问题", "不存在", "没问题", "设计如此", "故意", "不需要", "false positive", "by design")
@@ -195,6 +217,7 @@ class Nodes:
                     files="\n".join(sorted({f["path"] for f in files})),
                 ))])[:200]
             except Exception as e:  # noqa: BLE001
+                raise_if_unavailable(e)
                 log.warning("生成意图摘要失败: %s", e)
 
         # 静态分析覆盖整个 MR 的改动（不受增量审查影响），用于新问题发现和 lint 类问题的修复验证
@@ -241,7 +264,9 @@ class Nodes:
 
         known = [x for x in payload.get("findings", []) if x["file"] == f["path"]]
         known_text = "\n".join(f"- L{x.get('line')} [{x['severity']}] {x['title']}（{x['status']}）" for x in known) or "（无）"
-        fps = self.d.store.feedback(pp, "false_positive", 3)
+        # 同一文件、同一目录的误报例子最有参考价值，其次才是最近的
+        fps = sorted(self.d.store.feedback(pp, "false_positive", 50),
+                     key=lambda s: _path_affinity(s["finding"].get("file") or "", f["path"]), reverse=True)[:3]
         feedback = ""
         if fps:
             feedback = "本仓库曾被判定为误报的例子（避免类似判断）：\n" + "\n".join(
@@ -249,8 +274,11 @@ class Nodes:
             )
 
         out: list[dict] = []
-        for pass_key in cfg.passes:
+        passes = ["all"] if len(cfg.passes) > 1 and is_ignored(f["path"], cfg.light_files) else cfg.passes
+        for pass_key in passes:
             name, checklist = PASS_CHECKLISTS.get(pass_key, PASS_CHECKLISTS["all"])
+            # review_pass.md 把各轮相同的内容（规范、理解、diff）放在前面，随轮次变化的清单和已知问题放在末尾，
+            # 这样后几轮能复用模型服务对公共前缀的 KV 缓存，只需处理末尾几百个 token
             msg = render(
                 "review_pass", pass_name=name, checklist=checklist, claude_md=payload["claude_md"],
                 repo_rules=payload["repo_rules"], feedback=feedback, known_findings=known_text,
@@ -265,6 +293,7 @@ class Nodes:
                     continue
                 result = invoke_structured(FindingList, [*msgs, AIMessage(review_text), human(render("to_json", path=f["path"]))])
             except Exception as e:  # noqa: BLE001
+                raise_if_unavailable(e)
                 log.warning("审查 %s [%s] 失败: %s", f["path"], pass_key, e)
                 continue
             for item in result.findings:
@@ -290,6 +319,9 @@ class Nodes:
             return invoke_text(msgs)
         tools = make_tools(mirror, head)
         tool_map = {t.name: t for t in tools}
+        env = self.d.settings.env
+        # 工具结果会累积在对话里；给最终回答留出输出空间和余量，超出预算就不再调用工具
+        budget = int((env.llm_context_tokens - env.llm_max_tokens) * 0.8)
         try:
             llm = chat("review").bind_tools(tools)
             for _ in range(cfg.max_tool_steps):
@@ -303,12 +335,22 @@ class Nodes:
                         result = t.invoke(tc["args"]) if t else f"未知工具 {tc['name']}"
                     except Exception as e:  # noqa: BLE001
                         result = f"工具调用失败: {e}"
-                    msgs.append(ToolMessage(content=str(result)[:6000], tool_call_id=tc["id"]))
+                    room = max(0, (budget - estimate_tokens(msgs)) * 3)
+                    content = str(result)[:min(6000, room)] or "（上下文预算已用完，未返回结果）"
+                    msgs.append(ToolMessage(content=content, tool_call_id=tc["id"]))
+                if estimate_tokens(msgs) >= budget:
+                    break
             msgs.append(HumanMessage("请停止调用工具，直接给出理解分析。"))
             return clean_text(chat("review").invoke(msgs).content)
         except Exception as e:  # noqa: BLE001 服务端不支持工具调用时退化为直接理解
+            raise_if_unavailable(e)
             log.warning("工具调用模式失败，退化为直接理解: %s", str(e)[:200])
+        try:
             return invoke_text([self._sys(), human(text)])
+        except Exception as e:  # noqa: BLE001 理解只是辅助，失败时仍按 diff 审查，不能让单个文件拖垮整个 MR
+            raise_if_unavailable(e)
+            log.warning("理解 %s 失败，跳过理解阶段: %s", f["path"], str(e)[:200])
+            return "（无）"
 
     def aggregate(self, state: ReviewState) -> dict:
         """校验证据、修正行号、去重。"""
@@ -448,6 +490,7 @@ class Nodes:
                 out.append(invoke_structured(VerifyVerdict, [self._sys(), human(msg)], role="verify",
                                              temperature=temperature if temperature is not None else (0.3 if n > 1 else None)))
             except Exception as e:  # noqa: BLE001
+                raise_if_unavailable(e)
                 log.warning("复核失败，保留原结论: %s", e)
         return out
 
@@ -503,7 +546,14 @@ class Nodes:
         )
         try:
             check = invoke_structured(FixCheck, [self._sys(), human(msg)], role="verify")
+            if check.status == "fixed" and f["severity"] in ("P0", "P1"):
+                # 单次判断会把“只修了一半”误判为已修复：P0/P1 要第二票也认为已修复才关闭，否则采用第二票
+                second = invoke_structured(FixCheck, [self._sys(), human(msg)], role="verify", temperature=0.3)
+                if second.status != "fixed":
+                    log.info("修复验证两票不一致（fixed / %s），采用后者: %s", second.status, f["title"])
+                    check = second
         except Exception as e:  # noqa: BLE001
+            raise_if_unavailable(e)
             log.warning("修复验证失败: %s", e)
             return f, [], []
         f = f | {"last_checked_sha": head, "line": loc or f.get("line")}
@@ -575,6 +625,7 @@ class Nodes:
                     "reply_intent", finding=f"{f['title']}\n{f['detail']}", thread=thread, reply=reply,
                 ))]).intent
             except Exception as e:  # noqa: BLE001
+                raise_if_unavailable(e)
                 log.warning("意图识别失败，使用关键词: %s", e)
                 intent = _keyword_intent(reply)
         log.info("回复意图: %s（%s）", intent, fp)
@@ -603,6 +654,7 @@ class Nodes:
                         code=code, extra_context="",
                     ))], role="verify")
                 except Exception as e:  # noqa: BLE001
+                    raise_if_unavailable(e)
                     log.warning("复核失败，直接升级人工: %s", e)
                     v = DisputeVerdict(analysis="", verdict="maintain", reason="AI 复核失败，交由人工判断。")
                 if v.verdict == "accept":
@@ -651,6 +703,7 @@ class Nodes:
                 ))]).answer
                 actions.append({"kind": "reply", "fingerprint": fp, "body": ans, "resolve": None})
             except Exception as e:  # noqa: BLE001
+                raise_if_unavailable(e)
                 log.warning("回答问题失败: %s", e)
 
         findings[idx] = f

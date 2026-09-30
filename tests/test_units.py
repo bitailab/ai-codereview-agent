@@ -141,3 +141,74 @@ level=error msg="续行"
     assert "续行" in p["warnings"][0] and not any("HTTP Request" in x for x in p["lines"])
     assert parse_job_log(lines, 7)["phase"] == "done"
     assert parse_job_log(lines, 99) == {"found": False}
+
+
+def test_is_generated_detects_minified():
+    from ai_cr.graph.nodes import is_generated
+
+    assert is_generated("const _0x5b0f=_0x2898;" + "x" * 5000)
+    assert not is_generated("package main\n\nfunc f() {}\n")
+
+
+def test_chunks_split_oversized_hunk_and_truncate_long_lines():
+    from ai_cr.diff_parser import DiffLine, FileDiff, Hunk
+
+    lines = [DiffLine("-", 1, None, "x" * 50000), DiffLine("+", None, 1, "y" * 50000)]
+    lines += [DiffLine("+", None, i, "z" * 200) for i in range(2, 600)]
+    fd = FileDiff("a.js", "a.js", hunks=[Hunk("@@ -1 +1,599 @@", lines)])
+    groups = fd.chunks(48000)
+    assert len(groups) > 1
+    assert all(len(fd.annotated(g)) <= 48000 for g in groups)
+    text = "\n".join(fd.annotated(g) for g in groups)
+    assert "截断，原长 50000 字符" in text and "L599 +" in text
+
+
+def test_is_unavailable():
+    import httpx
+    import openai
+
+    from ai_cr.llm import is_unavailable
+
+    req = httpx.Request("POST", "http://127.0.0.1:1234/v1/chat/completions")
+    assert is_unavailable(openai.APIConnectionError(request=req))
+    assert not is_unavailable(openai.APITimeoutError(request=req))
+    assert is_unavailable(RuntimeError("Error code: 400 - {'error': 'Model unloaded.'}"))
+    assert not is_unavailable(RuntimeError("request (64879 tokens) exceeds the available context size"))
+
+
+def test_drain_requeues_when_model_unavailable(monkeypatch):
+    from types import SimpleNamespace
+
+    from ai_cr import worker
+
+    class Store:
+        def __init__(self):
+            self.jobs = [{"id": 1}, {"id": 2}]
+            self.log = []
+
+        def next_job(self):
+            return self.jobs.pop(0) if self.jobs else None
+
+        def requeue_job(self, job_id):
+            self.log.append(("requeue", job_id))
+
+        def finish_job(self, job_id, error=None):
+            self.log.append(("finish", job_id, error))
+
+    def run_job(deps, graph, job, resume=False):
+        raise RuntimeError("Error code: 400 - {'error': 'Model unloaded.'}")
+
+    monkeypatch.setattr(worker, "run_job", run_job)
+    store = Store()
+    worker.drain(SimpleNamespace(store=store), graph=None)
+    # 放回队列并停止消费，等模型就绪；不能把后面的任务也一个个标记失败
+    assert store.log == [("requeue", 1)]
+    assert store.jobs == [{"id": 2}]
+
+
+def test_path_affinity_prefers_same_file_then_dir():
+    from ai_cr.graph.nodes import _path_affinity
+
+    target = "app/edge/internal/events/service.go"
+    paths = ["pkg/x.go", "app/edge/internal/handlers/a.go", "app/edge/internal/events/types.go", target]
+    assert sorted(paths, key=lambda p: _path_affinity(p, target), reverse=True) == list(reversed(paths))
