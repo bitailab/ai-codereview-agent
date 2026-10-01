@@ -163,7 +163,22 @@ uv run ai-cr status <project> <iid>                     # findings and audit log
 uv run ai-cr ui [--port 8765]                           # local web UI
 ```
 
-The web UI shows the job queue, per-file progress, findings, and the prompt and reply of every model call.
+### Web UI
+
+`ai-cr ui` serves a read-only status page on `127.0.0.1` only. It shows the job queue, per-file progress, the findings of each MR, and the full prompt and reply of every model call. (The UI is in Chinese; the screenshots below use fictional demo data.)
+
+**Job queue and live progress**
+
+![Job queue and per-file progress](docs/images/webui-progress.png)
+
+**Findings with their lifecycle events**
+
+![Findings of an MR](docs/images/webui-findings.png)
+
+**Every model call, with prompt and reply**
+
+![Model calls](docs/images/webui-model-calls.png)
+
 
 ### Commands in MR comments
 

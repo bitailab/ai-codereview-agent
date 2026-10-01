@@ -163,7 +163,22 @@ uv run ai-cr status <project> <iid>                     # 查看某个 MR 的问
 uv run ai-cr ui [--port 8765]                           # 本地状态页
 ```
 
-状态页展示任务队列、逐文件进度、问题列表，以及每次模型调用的 prompt 与回复。
+### Web 状态页
+
+`ai-cr ui` 提供一个只读的状态页，只监听 `127.0.0.1`。它展示任务队列、逐文件进度、每个 MR 的问题列表，以及每次模型调用的完整 prompt 与回复。（下面的截图使用的是虚构的演示数据。）
+
+**任务队列与实时进度**
+
+![任务队列与逐文件进度](docs/images/webui-progress.png)
+
+**问题列表及其生命周期事件**
+
+![MR 的问题列表](docs/images/webui-findings.png)
+
+**每次模型调用的 prompt 与回复**
+
+![模型调用](docs/images/webui-model-calls.png)
+
 
 ### MR 评论命令
 
