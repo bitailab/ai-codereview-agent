@@ -53,12 +53,37 @@ def new_issues(head: list[LintIssue], base: list[LintIssue]) -> list[LintIssue]:
     return [i for i in head if i.key not in base_keys]
 
 
+BUILD_LINE_RE = re.compile(r"^//go:build[ \t]+(.+)$", re.M)
+# 默认构建条件下成立/可能成立的内置约束；出现其他标识符（integration、e2e…）说明依赖自定义 tag
+BUILTIN_TAGS = {
+    "linux", "darwin", "windows", "freebsd", "openbsd", "netbsd", "solaris", "android", "ios", "js", "wasip1",
+    "amd64", "arm64", "386", "arm", "wasm", "ppc64le", "s390x", "riscv64", "mips", "mips64", "loong64",
+    "unix", "cgo", "gc", "gccgo", "race",
+}
+
+
+def _needs_custom_tag(src: str) -> bool:
+    m = BUILD_LINE_RE.search(src[:2000])
+    if not m:
+        return False
+    tags = set(re.findall(r"[A-Za-z_][\w.]*", m.group(1)))
+    return any(t not in BUILTIN_TAGS and not re.fullmatch(r"go1\.\d+", t) for t in tags)
+
+
 def _packages(mirror: Mirror, sha: str, dirs: set[str]) -> list[str]:
-    """只保留在该 commit 中存在的目录（base 上可能还没有新建的包）。"""
+    """只保留在该 commit 中存在、且默认构建条件下有 Go 文件的目录。
+    base 上可能还没有新建的包；整个包的文件都带 //go:build integration 这类自定义 tag 时，
+    golangci-lint 会以 exit 7 失败并拖垮整次检查，所以直接跳过。"""
     out = []
     for d in sorted(dirs):
-        if d == "." or mirror.ls_tree(sha, d):
-            out.append("./" if d == "." else f"./{d}/")
+        names = mirror.ls_tree(sha, "" if d == "." else d)
+        if not names:
+            continue
+        go_files = [n for n in names if n.endswith(".go")]
+        if go_files and all(_needs_custom_tag(mirror.show(sha, n if d == "." else f"{d}/{n}") or "") for n in go_files):
+            log.info("跳过 %s：所有 Go 文件都依赖自定义 build tag", d)
+            continue
+        out.append("./" if d == "." else f"./{d}/")
     return out
 
 
