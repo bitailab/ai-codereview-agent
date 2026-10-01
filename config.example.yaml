@@ -68,4 +68,5 @@ pipeline:
 lifecycle:
   max_dispute_rounds: 2
   auto_approve: true
+  auto_merge: false           # approve 之后自动合并（只合并审查过的 head；GitLab 不允许合并时仅记日志）
   needs_human_label: "ai-review::needs-human"

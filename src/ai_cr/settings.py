@@ -75,6 +75,7 @@ class PipelineConfig(BaseModel):
 class LifecycleConfig(BaseModel):
     max_dispute_rounds: int = 2
     auto_approve: bool = True
+    auto_merge: bool = False                  # approve 之后自动合并（需 auto_approve；默认关闭）
     needs_human_label: str = "ai-review::needs-human"
 
 

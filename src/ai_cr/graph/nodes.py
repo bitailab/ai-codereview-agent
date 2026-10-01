@@ -872,6 +872,8 @@ class Nodes:
                 gl.unapprove(pp, iid)
             elif conclusion == "APPROVE":
                 gl.approve(pp, iid)
+                if lc.auto_merge and gl.merge(pp, iid, head):
+                    log.info("%s!%s 已自动合并", pp, iid)
         if state["event"]["kind"] in ("new_push", "human_command") and state["event"].get("command", "review") == "review":
             store.record_review(pp, iid, head, conclusion, summary)
             store.update_mr_state(pp, iid, last_reviewed_sha=head)

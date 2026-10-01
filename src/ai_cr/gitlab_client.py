@@ -127,6 +127,16 @@ class GitLab:
         except GitlabError as e:
             log.info("approve 未生效（可能已批准或无权限）: %s", e)
 
+    def merge(self, project_path: str, iid: int, sha: str) -> bool:
+        """只合并审查过的 head（sha 不匹配说明审查后又有新推送，GitLab 会拒绝）。不可合并时只记日志。"""
+        mr = self.project(project_path).mergerequests.get(iid, lazy=True)
+        try:
+            mr.merge(sha=sha)
+            return True
+        except GitlabError as e:
+            log.warning("自动合并未生效（有冲突、未满足合并条件或无权限）: %s", e)
+            return False
+
     def unapprove(self, project_path: str, iid: int) -> None:
         mr = self.project(project_path).mergerequests.get(iid, lazy=True)
         try:
