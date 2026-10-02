@@ -1,6 +1,6 @@
 #!/bin/zsh
 # 安装三个开机自启服务：
-#   com.huatuo.model —— 登录时启动 LM Studio 并以 40K 上下文加载模型
+#   com.huatuo.model —— 登录时启动 LM Studio 并以 96K 上下文加载模型
 #   com.huatuo.agent —— 常驻轮询 GitLab 并做 CR（模型未就绪时会等待）
 #   com.huatuo.ui    —— 只读状态页 http://127.0.0.1:8765
 # 模型启动脚本复制到 ~/.local/share/huatuo：launchd 下的 zsh 没有读取 ~/Documents 的权限。

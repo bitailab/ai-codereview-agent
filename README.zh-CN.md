@@ -140,10 +140,10 @@ uv run --no-project --with gguf gguf-new-metadata --chat-template-file deploy/qw
   Qwen3.6-35B-A3B-UD-Q4_K_M.gguf $dst/Qwen3.6-35B-A3B-UD-Q4_K_M-switch.gguf
 ```
 
-`deploy/start-model.sh` 会启动服务（端口 1234），并以 40K 上下文、单并发加载模型。它由开机自启任务自动执行（见[部署](#部署macos-launchd)），也可以手动运行。
+`deploy/start-model.sh` 会启动服务（端口 1234），并以 96K 上下文、单并发加载模型。它由开机自启任务自动执行（见[部署](#部署macos-launchd)），也可以手动运行。
 
 > [!IMPORTANT]
-> **必须显式指定上下文长度**（脚本里是 `-c 40960`），否则服务会使用默认的小上下文，内容会被静默截断。48GB 机器不要再调大，否则 GPU 内存耗尽会花屏死机。
+> **必须显式指定上下文长度**（脚本里是 `-c 98304`），否则服务会使用默认的小上下文，内容会被静默截断。48GB 机器上该模型的 KV 缓存很小（约 20KB/token），96K 上下文只比约 22GB 的权重多占约 2GB；再大没有测过，GPU 内存耗尽会花屏死机。
 >
 > 脚本会检查实际加载的上下文长度，不对就重新加载，并用文件锁保证同一时间只有一个实例在运行。
 >

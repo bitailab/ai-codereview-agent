@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 启动 LM Studio 服务并以 40K 上下文、单并发加载审查模型。由 launchd（com.huatuo.model）在登录时执行，也可手动运行。
+# 启动 LM Studio 服务并以 96K 上下文、单并发加载审查模型。由 launchd（com.huatuo.model）在登录时执行，也可手动运行。
 # 必须显式指定上下文长度，否则会使用默认的小上下文，内容会被静默截断。
 set -u
 LMS=~/.lmstudio/bin/lms
@@ -7,7 +7,7 @@ LMS=~/.lmstudio/bin/lms
 MODEL_KEY=qwen3.6-35b-a3b-switch@q4_k_m   # lms ls 中的模型名
 MODEL=qwen3.6-35b-a3b-gguf-switch         # API 中的模型 id，与 .env 的 LLM_MODEL 一致
 # 48GB 机器上模型权重约占 21G；上下文过大或多并发槽会让 KV/缓存把 GPU 内存耗尽，导致花屏死机
-CTX=40960
+CTX=98304
 PARALLEL=1   # 华佗串行调用模型，多余的并发槽只会多占内存
 log() { echo "$(date '+%F %T') $*"; }
 

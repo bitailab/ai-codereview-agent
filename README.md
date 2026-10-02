@@ -140,10 +140,10 @@ uv run --no-project --with gguf gguf-new-metadata --chat-template-file deploy/qw
   Qwen3.6-35B-A3B-UD-Q4_K_M.gguf $dst/Qwen3.6-35B-A3B-UD-Q4_K_M-switch.gguf
 ```
 
-`deploy/start-model.sh` starts the server (port 1234) and loads the model with a 40K context and a single parallel slot. It is run automatically at login (see [Deployment](#deployment-macos-launchd)) and can also be run by hand.
+`deploy/start-model.sh` starts the server (port 1234) and loads the model with a 96K context and a single parallel slot. It is run automatically at login (see [Deployment](#deployment-macos-launchd)) and can also be run by hand.
 
 > [!IMPORTANT]
-> **Always set the context length explicitly** (`-c 40960` in the script). Without it the server falls back to a small default context and silently truncates the prompt. On a 48 GB machine do not raise it further, or GPU memory runs out and the display glitches or the machine hangs.
+> **Always set the context length explicitly** (`-c 98304` in the script). Without it the server falls back to a small default context and silently truncates the prompt. On a 48 GB machine the KV cache for this model is small (about 20 KB per token), so 96K costs about 2 GB on top of the ~22 GB weights; going far beyond that is untested, and if GPU memory runs out the display can glitch or the machine can hang.
 >
 > The script verifies the context length that was actually loaded and reloads the model if it differs, and uses a file lock so only one instance runs at a time.
 >
