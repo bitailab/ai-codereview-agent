@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-from ai_cr.pipeline_gate import FAILED, READY, WAIT, check_pipeline
-from ai_cr.settings import PipelineConfig
+from huatuo.pipeline_gate import FAILED, READY, WAIT, check_pipeline
+from huatuo.settings import PipelineConfig
 
 from test_lifecycle import PP, env  # noqa: F401  复用端到端测试的环境
 
@@ -34,7 +34,7 @@ def test_check_pipeline_decisions():
 
 
 def test_poller_waits_for_pipeline(env):  # noqa: F811
-    from ai_cr.poller import poll_once
+    from huatuo.poller import poll_once
 
     gl, store = env.gl, env.deps.store
     gl.pipeline = {"id": 1, "sha": gl.head, "status": "running", "created_at": ts(1), "web_url": "u"}

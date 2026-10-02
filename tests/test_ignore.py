@@ -1,5 +1,5 @@
-from ai_cr.git_repo import is_ignored
-from ai_cr.settings import ReviewConfig
+from huatuo.git_repo import is_ignored
+from huatuo.settings import ReviewConfig
 
 
 def cfg(**kw):

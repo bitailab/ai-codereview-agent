@@ -9,8 +9,8 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
-from ai_cr.deps import Deps  # noqa: E402
-from ai_cr.graph.build import build_graph  # noqa: E402
+from huatuo.deps import Deps  # noqa: E402
+from huatuo.graph.build import build_graph  # noqa: E402
 
 pp, iid = sys.argv[1], int(sys.argv[2])
 deps = Deps.create()

@@ -3,7 +3,7 @@
 <!-- 登录时启动 LM Studio 并加载审查模型；失败时 60 秒后重试 -->
 <plist version="1.0">
 <dict>
-    <key>Label</key><string>com.aicr.model</string>
+    <key>Label</key><string>com.huatuo.model</string>
     <key>ProgramArguments</key>
     <array><string>/bin/zsh</string><string>__SHARE__/start-model.sh</string></array>
     <key>RunAtLoad</key><true/>

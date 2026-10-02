@@ -1,10 +1,12 @@
 <div align="center">
 
-# ai-cr
+# Huatuo 华佗
 
 **Automated GitLab merge request code review, powered by a local LLM.**
 
 Self-hosted and privacy-first: your code and data stay on your own machine, with no external services involved.
+
+*Named after Hua Tuo (华佗), the legendary physician of ancient China: it diagnoses your code.*
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-%E2%89%A53.12-blue.svg)](https://www.python.org/)
@@ -17,7 +19,7 @@ Self-hosted and privacy-first: your code and data stay on your own machine, with
 
 ---
 
-`ai-cr` is a code review agent built on [LangGraph](https://github.com/langchain-ai/langgraph). It polls GitLab for merge requests, reviews each changed file along several dimensions, verifies its own findings to weed out false positives, posts inline discussions plus a summary, and automatically approves or un-approves the MR. It then tracks every finding through its whole lifecycle: dispute, escalation to a human, and fix verification.
+Huatuo is a code review agent built on [LangGraph](https://github.com/langchain-ai/langgraph). It polls GitLab for merge requests, reviews each changed file along several dimensions, verifies its own findings to weed out false positives, posts inline discussions plus a summary, and automatically approves or un-approves the MR. It then tracks every finding through its whole lifecycle: dispute, escalation to a human, and fix verification.
 
 It runs entirely on your own hardware, against a local, OpenAI-compatible model server (tested with LM Studio and Qwen3.6-35B-A3B) and your own GitLab. It depends on no external service, and no source code is sent to a third-party API. See [Security and privacy](#security-and-privacy) for exactly what it contacts and stores.
 
@@ -72,7 +74,7 @@ Jobs are consumed serially: the local model handles one MR at a time, so several
 
 ## Security and privacy
 
-`ai-cr` is designed for teams that cannot, or will not, send source code to a third party. Everything runs on your own machine, against your own GitLab and your own model. There is no SaaS component, no account, no license server and no telemetry.
+Huatuo is designed for teams that cannot, or will not, send source code to a third party. Everything runs on your own machine, against your own GitLab and your own model. There is no SaaS component, no account, no license server and no telemetry.
 
 **What it talks to.** At runtime the only network peers are:
 
@@ -93,8 +95,8 @@ Nothing else is contacted: no cloud LLM API, no package or model download, no an
 - `data/llm_trace.db` stores the full prompt and reply of every model call, which means source code, for 7 days (`LLM_TRACE_DAYS`) so that the UI can show them. Set `LLM_TRACE=false` to turn this off, or protect `data/` with disk encryption and restrictive permissions.
 - Mirrors, worktrees and logs under `data/` also contain code. Treat the directory as sensitive.
 - Use a dedicated bot account whose token has only the access it needs. With `git_url_style: http` the token is passed to `git` as a request header; SSH avoids that.
-- `ai-cr` does not stop you from pointing `LLM_BASE_URL` at a remote endpoint. If you do, your code goes there. To enforce "local only", add an egress rule that allows just your GitLab host and `127.0.0.1`.
-- The model server is a separate program with its own network behavior. LM Studio, for example, may check for updates; configure it (or firewall it) as your policy requires. The claims in this section are about `ai-cr` itself.
+- Huatuo does not stop you from pointing `LLM_BASE_URL` at a remote endpoint. If you do, your code goes there. To enforce "local only", add an egress rule that allows just your GitLab host and `127.0.0.1`.
+- The model server is a separate program with its own network behavior. LM Studio, for example, may check for updates; configure it (or firewall it) as your policy requires. The claims in this section are about Huatuo itself.
 - LangChain's optional LangSmith tracing is off unless you set its environment variables (`LANGSMITH_*`); do not set them.
 - Repository content is untrusted input to the model. A comment or file in an MR can try to steer the review. Findings are verified and their severity is capped (for example test files stay at P2), and `config.yaml` can [pin which files are skipped](#skipping-files-centrally) so developers cannot opt code out of review.
 
@@ -110,6 +112,8 @@ You can check the claims above yourself: the whole code base is small, and `grep
 
 ## Quick start
 
+> The command-line tool and the Python package are named `huatuo`. The old command name `ai-cr` still works as an alias.
+
 ```bash
 git clone git@github.com:bitailab/ai-codereview-agent.git
 cd ai-codereview-agent
@@ -117,9 +121,9 @@ cd ai-codereview-agent
 cp .env.example .env                  # GITLAB_URL, GITLAB_TOKEN, model endpoint and name
 cp config.example.yaml config.yaml    # project list and human_reviewer (your GitLab username)
 uv sync
-uv run ai-cr check                    # verifies the GitLab account, repo access and model connectivity
+uv run huatuo check                    # verifies the GitLab account, repo access and model connectivity
 
-uv run ai-cr review my-group/service-a 123 --dry-run   # try it: prints the review, posts nothing
+uv run huatuo review my-group/service-a 123 --dry-run   # try it: prints the review, posts nothing
 ```
 
 Code is fetched through bare mirrors in `data/mirrors/` (SSH by default, so your GitLab SSH key must be set up). Your own working copy is never touched.
@@ -143,7 +147,7 @@ uv run --no-project --with gguf gguf-new-metadata --chat-template-file deploy/qw
 >
 > The script verifies the context length that was actually loaded and reloads the model if it differs, and uses a file lock so only one instance runs at a time.
 >
-> Each extra parallel slot costs its own KV cache, so `--parallel` is kept at 1 and ai-cr calls the model serially.
+> Each extra parallel slot costs its own KV cache, so `--parallel` is kept at 1 and Huatuo calls the model serially.
 
 If you use `mlx_lm.server` instead, set `LLM_STRUCTURED_MODE=text` in `.env`.
 
@@ -203,17 +207,17 @@ With `lifecycle.auto_merge: true`, the agent merges an MR right after it approve
 ## Usage
 
 ```bash
-uv run ai-cr review my-group/service-a 123 --dry-run    # print only, post nothing
-uv run ai-cr review <project> <iid> --full              # review now and post to GitLab
-uv run ai-cr run                                        # long-running: poll + process jobs
-uv run ai-cr poll                                       # poll once and enqueue, do not process
-uv run ai-cr status <project> <iid>                     # findings and audit log of an MR
-uv run ai-cr ui [--port 8765]                           # local web UI
+uv run huatuo review my-group/service-a 123 --dry-run    # print only, post nothing
+uv run huatuo review <project> <iid> --full              # review now and post to GitLab
+uv run huatuo run                                        # long-running: poll + process jobs
+uv run huatuo poll                                       # poll once and enqueue, do not process
+uv run huatuo status <project> <iid>                     # findings and audit log of an MR
+uv run huatuo ui [--port 8765]                           # local web UI
 ```
 
 ### Web UI
 
-`ai-cr ui` serves a read-only status page on `127.0.0.1` only. It shows the job queue, per-file progress, the findings of each MR, and the full prompt and reply of every model call. (The UI is in Chinese; the screenshots below use fictional demo data.)
+`huatuo ui` serves a read-only status page on `127.0.0.1` only. It shows the job queue, per-file progress, the findings of each MR, and the full prompt and reply of every model call. (The UI is in Chinese; the screenshots below use fictional demo data.)
 
 **Job queue and live progress**
 
@@ -237,21 +241,25 @@ uv run ai-cr ui [--port 8765]                           # local web UI
 | `/ai-downgrade P2` | Change the severity (human reviewer only) |
 | `/ai-review` | Full re-review, skipping the pipeline wait (anyone) |
 
+`/huatuo-confirm`, `/huatuo-accept`, `/huatuo-downgrade` and `/huatuo-review` are accepted as aliases.
+
 ## Deployment (macOS launchd)
 
 `./deploy/install.sh` installs three launchd jobs. Re-run it after changing `start-model.sh` or a plist.
 
 | Job | Purpose | Log |
 |---|---|---|
-| `com.aicr.model` | Starts LM Studio and loads the model at login; retries after 60 s on failure | `~/.local/share/ai-cr/model.log` |
-| `com.aicr.agent` | Long-running poller and reviewer; restarted if it exits | `data/agent.log` |
-| `com.aicr.ui` | Read-only status page at http://127.0.0.1:8765 | `data/ui.log` |
+| `com.huatuo.model` | Starts LM Studio and loads the model at login; retries after 60 s on failure | `~/.local/share/huatuo/model.log` |
+| `com.huatuo.agent` | Long-running poller and reviewer; restarted if it exits | `data/agent.log` |
+| `com.huatuo.ui` | Read-only status page at http://127.0.0.1:8765 | `data/ui.log` |
 
 On every cycle the agent checks that the model is loaded with at least a 32K context. If it is not ready, the agent only polls and keeps jobs queued, then continues automatically once the model is up. While the agent runs on AC power it prevents idle sleep (`caffeinate`).
 
-The model script is installed to `~/.local/share/ai-cr/` because zsh under launchd has no permission to read `~/Documents`.
+The model script is installed to `~/.local/share/huatuo/` because zsh under launchd has no permission to read `~/Documents`.
 
-To stop a job: `launchctl bootout gui/$(id -u)/com.aicr.agent` (the same for the model).
+Upgrading from the old name (`ai-cr`): re-run `./deploy/install.sh`. It moves the script directory, removes the old `com.aicr.*` jobs and installs the `com.huatuo.*` ones.
+
+To stop a job: `launchctl bootout gui/$(id -u)/com.huatuo.agent` (the same for the model).
 
 ## Finding lifecycle
 
@@ -274,7 +282,7 @@ Packages whose Go files all require a custom build tag (for example `//go:build 
 `golangci-lint` must match the repository's Go version. For example, for a repository that needs Go 1.27:
 
 ```bash
-GOTOOLCHAIN=go1.27.1 GOBIN=~/.local/share/ai-cr/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+GOTOOLCHAIN=go1.27.1 GOBIN=~/.local/share/huatuo/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 ```
 
 ## Pipeline gate and merge gate

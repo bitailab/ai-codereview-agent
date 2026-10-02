@@ -226,7 +226,7 @@ PAGE = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI CR 状态</title>
+<title>华佗 状态</title>
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7385; --line: #e3e6ec;
@@ -286,7 +286,7 @@ pre { background: var(--code); padding: 8px 10px; border-radius: 6px; overflow-x
 </head>
 <body>
 <header>
-  <h1>AI CR 状态</h1>
+  <h1>华佗 状态</h1>
   <span class="pill" id="model">模型…</span>
   <span class="pill" id="counts"></span>
   <span class="pill muted" id="updated"></span>

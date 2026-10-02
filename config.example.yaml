@@ -28,7 +28,7 @@ review:
   # test_files: ["*_test.go", "*.test.*", ...]  # 测试文件只用测试专用清单审一轮，问题最高 P2，不阻断 MR
   static_analysis:
     enabled: true             # golangci-lint：base/head 各跑一次，只报本次 MR 新引入的问题
-    golangci_lint:            # 为空时依次查找 ~/.local/share/ai-cr/bin/golangci-lint、PATH（需与仓库 Go 版本匹配）
+    golangci_lint:            # 为空时依次查找 ~/.local/share/huatuo/bin/golangci-lint、PATH（需与仓库 Go 版本匹配）
     extra_linters: [unused]   # 在仓库 .golangci.yml 之外额外启用（unused 可发现改动导致的死代码）
     timeout_seconds: 600
     severity:                 # 未列出的 linter 为 default；P1 会阻断合并

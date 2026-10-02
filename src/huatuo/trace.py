@@ -24,7 +24,7 @@ from langchain_core.messages import BaseMessage
 
 log = logging.getLogger(__name__)
 
-_step: contextvars.ContextVar[str] = contextvars.ContextVar("ai_cr_trace_step", default="")
+_step: contextvars.ContextVar[str] = contextvars.ContextVar("huatuo_trace_step", default="")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (

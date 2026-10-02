@@ -8,7 +8,7 @@ from .deps import Deps
 
 
 def main(argv: list[str] | None = None) -> None:
-    p = argparse.ArgumentParser(prog="ai-cr", description="本地模型 GitLab MR 自动代码审查")
+    p = argparse.ArgumentParser(prog="huatuo", description="华佗：本地模型 GitLab MR 自动代码审查")
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("run", help="常驻运行：轮询 + 处理任务")

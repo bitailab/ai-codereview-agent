@@ -34,7 +34,7 @@ class Env(BaseSettings):
 
 class StaticAnalysisConfig(BaseModel):
     enabled: bool = True
-    golangci_lint: str | None = None          # 为空时依次查找 ~/.local/share/ai-cr/bin/golangci-lint、PATH
+    golangci_lint: str | None = None          # 为空时依次查找 ~/.local/share/huatuo/bin/golangci-lint、PATH
     extra_linters: list[str] = Field(default_factory=lambda: ["unused"])  # 在仓库 .golangci.yml 之外额外启用
     timeout_seconds: int = 600
     # lint 问题的级别；未列出的 linter 用 default

@@ -1,5 +1,5 @@
 [project]
-name = "ai-cr"
+name = "huatuo"
 version = "0.1.0"
 description = "Local-LLM GitLab MR code review agent built on LangGraph"
 authors = [
@@ -20,7 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
-ai-cr = "ai_cr.cli:main"
+huatuo = "huatuo.cli:main"
+ai-cr = "huatuo.cli:main"   # 旧命令名，保留为别名
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

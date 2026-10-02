@@ -1,4 +1,4 @@
-from ai_cr.static_analysis import _packages
+from huatuo.static_analysis import _packages
 
 
 class FakeMirror:

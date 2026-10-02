@@ -7,12 +7,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_cr.deps import Deps
-from ai_cr.graph import nodes as nodes_mod
-from ai_cr.graph.build import build_graph
-from ai_cr.graph.state import DisputeVerdict, FindingList, FixCheck, LLMFinding, ReplyIntent, VerifyVerdict
-from ai_cr.settings import Config, Env, ReviewConfig, Settings, StaticAnalysisConfig
-from ai_cr.store import Store
+from huatuo.deps import Deps
+from huatuo.graph import nodes as nodes_mod
+from huatuo.graph.build import build_graph
+from huatuo.graph.state import DisputeVerdict, FindingList, FixCheck, LLMFinding, ReplyIntent, VerifyVerdict
+from huatuo.settings import Config, Env, ReviewConfig, Settings, StaticAnalysisConfig
+from huatuo.store import Store
 
 PP = "grp/svc"
 
@@ -200,7 +200,7 @@ def test_dispute_accepted_withdraws(env):
 
 
 def test_poller_scans_discussions(env):
-    from ai_cr.poller import _scan_discussions
+    from huatuo.poller import _scan_discussions
 
     run(env, "new_push")
     f = env.deps.store.findings(PP, 7)[0]
@@ -229,7 +229,7 @@ def test_poller_scans_discussions(env):
 
 def test_comment_conclusion_does_not_approve(env):
     """只有 P2 建议时结论为 COMMENT：不 approve，也不 unapprove。"""
-    import ai_cr.graph.nodes as N
+    import huatuo.graph.nodes as N
     orig = N.invoke_structured
 
     def p2_only(schema, messages, **k):
@@ -248,7 +248,7 @@ def test_comment_conclusion_does_not_approve(env):
 
 def test_lint_findings_lifecycle(env, monkeypatch):
     """lint 新问题：不经模型复核直接发布；落在未改动行上时发普通讨论；lint 不再报告时自动判定修复。"""
-    from ai_cr.static_analysis import LintIssue
+    from huatuo.static_analysis import LintIssue
 
     env.deps.settings.config.review.static_analysis.enabled = True
     unused = LintIssue("unused", "svc.go", 3, "var cache is unused", "var cache = map[string]int{}")
@@ -317,7 +317,7 @@ def test_test_file_findings_capped_and_use_test_checklist(env, monkeypatch):
 
 
 def test_resolve_right_after_reply_is_not_verified_twice(env):
-    from ai_cr.poller import _scan_discussions
+    from huatuo.poller import _scan_discussions
 
     run(env, "new_push")
     f = env.deps.store.findings(PP, 7)[0]
@@ -379,7 +379,7 @@ def test_reviewing_notice_then_result_in_same_note(env):
     orig = env.gl.upsert_note
     env.gl.upsert_note = lambda pp, iid, note_id, body: bodies.append((note_id, body)) or orig(pp, iid, note_id, body)
     run(env, "new_push")
-    assert "AI 正在审查" in bodies[0][1] and "1 个文件块" in bodies[0][1]
+    assert "华佗正在审查" in bodies[0][1] and "1 个文件块" in bodies[0][1]
     assert bodies[-1][0] == 1 and "AI 正在审查" not in bodies[-1][1]  # 审查结果原地覆盖同一条评论
     assert len({nid or 1 for nid, _ in bodies}) == 1
 
@@ -390,7 +390,7 @@ def test_dry_run_posts_no_reviewing_notice(env):
 
 
 def test_failed_review_replaces_reviewing_notice(env, monkeypatch):
-    from ai_cr import worker
+    from huatuo import worker
 
     env.deps.store.update_mr_state(PP, 7, summary_note_id=1)
     env.gl.notes[1] = "AI 正在审查 ..."

@@ -42,7 +42,7 @@ class LintIssue:
 
 
 def find_golangci(configured: str | None) -> str | None:
-    for cand in (configured, "~/.local/share/ai-cr/bin/golangci-lint"):
+    for cand in (configured, "~/.local/share/huatuo/bin/golangci-lint", "~/.local/share/ai-cr/bin/golangci-lint"):
         if cand and Path(os.path.expanduser(cand)).is_file():
             return os.path.expanduser(cand)
     return shutil.which("golangci-lint")

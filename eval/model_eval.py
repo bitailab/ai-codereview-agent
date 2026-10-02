@@ -8,12 +8,12 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
 logging.basicConfig(level=logging.WARNING)
-logging.getLogger("ai_cr.graph.nodes").setLevel(logging.INFO)  # 看得到“多轮共识跳过复核 / 复核判定误报”，便于分析误报来源
+logging.getLogger("huatuo.graph.nodes").setLevel(logging.INFO)  # 看得到“多轮共识跳过复核 / 复核判定误报”，便于分析误报来源
 import test_lifecycle as T  # noqa: E402
-from ai_cr.deps import Deps  # noqa: E402
-from ai_cr.graph.build import build_graph  # noqa: E402
-from ai_cr.settings import Config, Env, ReviewConfig, Settings, StaticAnalysisConfig  # noqa: E402
-from ai_cr.store import Store  # noqa: E402
+from huatuo.deps import Deps  # noqa: E402
+from huatuo.graph.build import build_graph  # noqa: E402
+from huatuo.settings import Config, Env, ReviewConfig, Settings, StaticAnalysisConfig  # noqa: E402
+from huatuo.store import Store  # noqa: E402
 
 LABEL, OUT = sys.argv[1], sys.argv[2]
 REAL_MR = os.environ.get("EVAL_REAL_MR", "")
@@ -135,7 +135,7 @@ for name, content, want in [("F1 完整修复→应判已修复", FULL_FIX, True
 
 # ---------- 真实 MR ----------
 if not SKIP_REAL:
-    from ai_cr.settings import get_settings
+    from huatuo.settings import get_settings
     deps = Deps.create()
     deps.settings.config.review.static_analysis.enabled = False  # 只评模型
     _orig_mr = deps.gl.mr

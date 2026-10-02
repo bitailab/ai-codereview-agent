@@ -14,7 +14,7 @@ from .store import now
 
 log = logging.getLogger(__name__)
 
-COMMAND_RE = re.compile(r"^\s*/ai-(review|confirm|accept|downgrade)\b[ \t]*(.*)", re.I | re.S)
+COMMAND_RE = re.compile(r"^\s*/(?:ai|huatuo)-(review|confirm|accept|downgrade)\b[ \t]*(.*)", re.I | re.S)
 
 
 def parse_command(body: str) -> tuple[str, str] | None:

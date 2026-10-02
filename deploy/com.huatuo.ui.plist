@@ -2,18 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key><string>com.aicr.agent</string>
+    <key>Label</key><string>com.huatuo.ui</string>
     <key>WorkingDirectory</key><string>__REPO__</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__UV__</string><string>run</string><string>ai-cr</string><string>run</string>
+        <string>__UV__</string><string>run</string><string>huatuo</string><string>ui</string>
     </array>
-    <!-- launchd 默认 PATH 不含 go / golangci-lint，静态分析需要 -->
+    <!-- 只读状态页 http://127.0.0.1:8765 -->
     <key>EnvironmentVariables</key>
     <dict><key>PATH</key><string>__PATH__</string></dict>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
-    <key>StandardOutPath</key><string>__REPO__/data/agent.log</string>
-    <key>StandardErrorPath</key><string>__REPO__/data/agent.log</string>
+    <key>StandardOutPath</key><string>__REPO__/data/ui.log</string>
+    <key>StandardErrorPath</key><string>__REPO__/data/ui.log</string>
 </dict>
 </plist>

@@ -4,6 +4,9 @@ from __future__ import annotations
 from datetime import datetime
 
 from ..gitlab_client import BOT_MARKER, SUMMARY_MARKER, finding_marker
+
+HEADER = "### 🩺 华佗 · AI 代码审查"
+LEGACY_HEADER = "### 🤖 AI Code Review"  # 旧版本发出的汇总评论标题，嵌入“上一轮结果”时要一并去掉
 from .gate import is_blocking
 
 SEV_ICON = {"P0": "🔴 P0", "P1": "🟠 P1", "P2": "🔵 P2"}
@@ -44,7 +47,7 @@ def finding_body(f: dict) -> str:
         parts += ["", "**问题代码**", f"```{lang_of(f['file'])}", f["evidence"].strip("\n"), "```"]
     if f.get("suggestion"):
         parts += ["", "**建议**", "", f["suggestion"]]
-    parts += ["", "<sub>🤖 AI Code Review · 认为是误报请直接回复理由；修复后 push 即可自动验证，也可回复“已修复”。</sub>"]
+    parts += ["", "<sub>🩺 华佗 · 认为是误报请直接回复理由；修复后 push 即可自动验证，也可回复“已修复”。</sub>"]
     return "\n".join(parts)
 
 
@@ -61,7 +64,7 @@ def summary_body(*, head_sha: str, conclusion: str, intent: str, findings: list[
     lines = [
         SUMMARY_MARKER,
         BOT_MARKER,
-        "### 🤖 AI Code Review",
+        HEADER,
         "",
         f"- **当前版本**：`{head_sha[:8]}`",
         f"- **结论**：{CONCLUSION_TEXT[conclusion]}",
@@ -88,8 +91,8 @@ def summary_body(*, head_sha: str, conclusion: str, intent: str, findings: list[
         "",
         "<details><summary>规则说明</summary>",
         "",
-        "- P0 未关闭 → 阻断；P1 未修复且无解释 → 阻断；P2 仅建议，不阻断。所有问题关闭后 AI 才会 approve。",
-        "- 开发者认为误报：在对应讨论下回复理由，AI 会复核；AI 仍坚持的 P0/P1 会升级给人工裁决。",
+        "- P0 未关闭 → 阻断；P1 未修复且无解释 → 阻断；P2 仅建议，不阻断。所有问题关闭后华佗才会 approve。",
+        "- 开发者认为误报：在对应讨论下回复理由，华佗会复核；华佗仍坚持的 P0/P1 会升级给人工裁决。",
         f"- 人工裁决（仅 @{human}）：`/ai-confirm` 问题成立、`/ai-accept` 放行、`/ai-downgrade P2` 调整级别；在 MR 下评论 `/ai-review` 触发全量重审。",
         "",
         "</details>",
@@ -103,7 +106,7 @@ def pipeline_notice_body(head_sha: str, pipeline: dict, previous_summary: str | 
     lines = [
         SUMMARY_MARKER,
         BOT_MARKER,
-        "### 🤖 AI Code Review",
+        HEADER,
         "",
         f"⏸️ **等待流水线通过**：当前版本 `{head_sha[:8]}` 的流水线 "
         f"[#{pipeline.get('id')}]({pipeline.get('web_url', '')}) 状态为 **{pipeline.get('status')}**。",
@@ -118,8 +121,8 @@ def pipeline_notice_body(head_sha: str, pipeline: dict, previous_summary: str | 
     failed = pipeline.get("status") in ("failed", "canceled")
     lines += [
         "",
-        ("请先修复单测 / 集测 / lint 问题，流水线通过后会自动开始 AI 代码审查。" if failed
-         else "流水线正在重新运行，通过后会自动开始 AI 代码审查。")
+        ("请先修复单测 / 集测 / lint 问题，流水线通过后会自动开始代码审查。" if failed
+         else "流水线正在重新运行，通过后会自动开始代码审查。")
         + "如需跳过等待，可在 MR 下评论 `/ai-review`。",
     ]
     return "\n".join(lines + _previous_summary(previous_summary))
@@ -131,9 +134,9 @@ def reviewing_notice_body(head_sha: str, chunks: int, previous_summary: str | No
     lines = [
         SUMMARY_MARKER,
         BOT_MARKER,
-        "### 🤖 AI Code Review",
+        HEADER,
         "",
-        f"🔍 **AI 正在审查** 当前版本 `{head_sha[:8]}`（{chunks} 个文件块，预计约 {minutes} 分钟）。"
+        f"🔍 **华佗正在审查** 当前版本 `{head_sha[:8]}`（{chunks} 个文件块，预计约 {minutes} 分钟）。"
         "审查完成后本条评论会更新为审查结果。",
     ]
     return "\n".join(lines + _previous_summary(previous_summary))
@@ -143,9 +146,9 @@ def review_failed_body(head_sha: str, previous_summary: str | None) -> str:
     lines = [
         SUMMARY_MARKER,
         BOT_MARKER,
-        "### 🤖 AI Code Review",
+        HEADER,
         "",
-        f"⚠️ 当前版本 `{head_sha[:8]}` 的 AI 审查**未能完成**，会在下次推送时重试；如需立即重试，可在 MR 下评论 `/ai-review`。",
+        f"⚠️ 华佗对当前版本 `{head_sha[:8]}` 的审查**未能完成**，会在下次推送时重试；如需立即重试，可在 MR 下评论 `/ai-review`。",
     ]
     return "\n".join(lines + _previous_summary(previous_summary))
 
@@ -154,5 +157,5 @@ def _previous_summary(previous_summary: str | None) -> list[str]:
     if not previous_summary:
         return []
     prev = previous_summary.replace(SUMMARY_MARKER, "").replace(BOT_MARKER, "").strip()
-    prev = prev.replace("### 🤖 AI Code Review", "").strip()
+    prev = prev.replace(HEADER, "").replace(LEGACY_HEADER, "").strip()
     return ["", "---", "", "<details><summary>上一轮审查结果</summary>", "", prev, "", "</details>"]

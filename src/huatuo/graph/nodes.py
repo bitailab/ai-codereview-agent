@@ -705,7 +705,7 @@ class Nodes:
                 if f["severity"] in ("P0", "P1") and f["status"] != "ESCALATED":
                     f["status"] = "ESCALATED"
                 actions.append({"kind": "reply", "fingerprint": fp, "resolve": False,
-                                "body": f"已达到 AI 复核次数上限，等待 @{human_user} 人工裁决。"})
+                                "body": f"已达到华佗复核次数上限，等待 @{human_user} 人工裁决。"})
             else:
                 f["dispute_rounds"] += 1
                 f["status"] = "DISPUTED"
@@ -718,7 +718,7 @@ class Nodes:
                 except Exception as e:  # noqa: BLE001
                     raise_if_unavailable(e)
                     log.warning("复核失败，直接升级人工: %s", e)
-                    v = DisputeVerdict(analysis="", verdict="maintain", reason="AI 复核失败，交由人工判断。")
+                    v = DisputeVerdict(analysis="", verdict="maintain", reason="华佗复核失败，交由人工判断。")
                 if v.verdict == "accept":
                     f, acts = self._close(f, "WITHDRAWN", f"🙆 接受解释，撤回该问题：{v.reason}", resolve=True)
                     actions += acts

@@ -1,10 +1,12 @@
 <div align="center">
 
-# ai-cr
+# 华佗 Huatuo
 
 **基于本地大模型的 GitLab MR 自动代码审查。**
 
 私有化部署、数据安全优先：代码和数据都留在你自己的机器上，不依赖任何外部服务。
+
+*取名自中国古代神医华佗：为你的代码“望闻问切”。*
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-%E2%89%A53.12-blue.svg)](https://www.python.org/)
@@ -17,7 +19,7 @@
 
 ---
 
-`ai-cr` 是基于 [LangGraph](https://github.com/langchain-ai/langgraph) 的代码审查 Agent：轮询 GitLab 上的合并请求（MR），按文件分维度审查，对发现的问题再做一轮复核以去除误报，发布行内讨论和汇总评论，并自动 approve / unapprove。之后它会跟踪每个问题的完整生命周期：开发者反驳、升级人工、修复验证。
+华佗是基于 [LangGraph](https://github.com/langchain-ai/langgraph) 的代码审查 Agent：轮询 GitLab 上的合并请求（MR），按文件分维度审查，对发现的问题再做一轮复核以去除误报，发布行内讨论和汇总评论，并自动 approve / unapprove。之后它会跟踪每个问题的完整生命周期：开发者反驳、升级人工、修复验证。
 
 它完全运行在你自己的硬件上，使用本地的、兼容 OpenAI 接口的模型服务（已用 LM Studio 加 Qwen3.6-35B-A3B 验证）和你自己的 GitLab，不依赖任何外部服务，源码不会发送给任何第三方 API。它具体会访问什么、保存什么，见[安全与隐私](#安全与隐私)。
 
@@ -72,7 +74,7 @@ flowchart LR
 
 ## 安全与隐私
 
-`ai-cr` 面向不能、或者不愿意把源码交给第三方的团队。所有环节都在你自己的机器上，对接你自己的 GitLab 和你自己的模型。没有 SaaS 组件，不需要注册账号，没有授权服务器，也没有任何遥测。
+华佗面向不能、或者不愿意把源码交给第三方的团队。所有环节都在你自己的机器上，对接你自己的 GitLab 和你自己的模型。没有 SaaS 组件，不需要注册账号，没有授权服务器，也没有任何遥测。
 
 **它会访问谁。** 运行时只有这两个网络对端：
 
@@ -93,8 +95,8 @@ flowchart LR
 - `data/llm_trace.db` 会保存每次模型调用的完整 prompt 和回复，也就是源码，默认保留 7 天（`LLM_TRACE_DAYS`），供状态页查看。设置 `LLM_TRACE=false` 可以关闭，或者对 `data/` 做磁盘加密并收紧权限。
 - `data/` 下的 mirror、worktree 和日志里同样含有代码，请把整个目录当作敏感数据。
 - 使用专用的 bot 账号，token 只给必要的权限。`git_url_style: http` 时 token 会以请求头的形式传给 `git`，用 SSH 可以避免。
-- `ai-cr` 不会阻止你把 `LLM_BASE_URL` 指向远程地址，那样代码就会发到那里。要强制“只允许本地”，请加一条出站规则，只放行你的 GitLab 地址和 `127.0.0.1`。
-- 模型服务是独立的程序，有它自己的联网行为，比如 LM Studio 可能会检查更新，请按你的安全策略配置它或者用防火墙限制。本节说的都是 `ai-cr` 自身的行为。
+- 华佗不会阻止你把 `LLM_BASE_URL` 指向远程地址，那样代码就会发到那里。要强制“只允许本地”，请加一条出站规则，只放行你的 GitLab 地址和 `127.0.0.1`。
+- 模型服务是独立的程序，有它自己的联网行为，比如 LM Studio 可能会检查更新，请按你的安全策略配置它或者用防火墙限制。本节说的都是华佗自身的行为。
 - LangChain 可选的 LangSmith 追踪默认关闭，除非你设置它的环境变量（`LANGSMITH_*`），请不要设置。
 - 仓库内容对模型来说是不可信输入，MR 里的评论或文件可能试图影响审查结果。问题会经过复核，级别有上限（比如测试文件最高 P2），并且可以在 `config.yaml` 里[集中指定跳过哪些文件](#集中配置跳过的文件)，开发者无法自己把代码排除在审查之外。
 
@@ -110,6 +112,8 @@ flowchart LR
 
 ## 快速开始
 
+> 命令行工具和 Python 包的名字是 `huatuo`，旧的命令名 `ai-cr` 仍可作为别名使用。
+
 ```bash
 git clone git@github.com:bitailab/ai-codereview-agent.git
 cd ai-codereview-agent
@@ -117,9 +121,9 @@ cd ai-codereview-agent
 cp .env.example .env                  # 填 GITLAB_URL、GITLAB_TOKEN、模型地址与名称
 cp config.example.yaml config.yaml    # 填仓库列表和 human_reviewer（你的 GitLab 用户名）
 uv sync
-uv run ai-cr check                    # 检查 GitLab 账号、仓库权限、模型连通性
+uv run huatuo check                    # 检查 GitLab 账号、仓库权限、模型连通性
 
-uv run ai-cr review my-group/service-a 123 --dry-run   # 试跑：只打印审查结果，不提交
+uv run huatuo review my-group/service-a 123 --dry-run   # 试跑：只打印审查结果，不提交
 ```
 
 代码通过 `data/mirrors/` 下的 bare mirror 获取（默认走 SSH，需要本机已配置 GitLab SSH key），不会动你本地的工作区。
@@ -143,7 +147,7 @@ uv run --no-project --with gguf gguf-new-metadata --chat-template-file deploy/qw
 >
 > 脚本会检查实际加载的上下文长度，不对就重新加载，并用文件锁保证同一时间只有一个实例在运行。
 >
-> 每多一个并发槽位都要多占一份 KV cache，所以 `--parallel` 保持为 1，ai-cr 也是串行调用模型。
+> 每多一个并发槽位都要多占一份 KV cache，所以 `--parallel` 保持为 1，华佗也是串行调用模型。
 
 如果改用 `mlx_lm.server`，请在 `.env` 中设置 `LLM_STRUCTURED_MODE=text`。
 
@@ -203,17 +207,17 @@ review:
 ## 使用
 
 ```bash
-uv run ai-cr review my-group/service-a 123 --dry-run    # 试跑，只打印不提交
-uv run ai-cr review <project> <iid> --full              # 立即审查并提交
-uv run ai-cr run                                        # 常驻：轮询 + 处理任务
-uv run ai-cr poll                                       # 只轮询一次并入队，不处理
-uv run ai-cr status <project> <iid>                     # 查看某个 MR 的问题状态与审计日志
-uv run ai-cr ui [--port 8765]                           # 本地状态页
+uv run huatuo review my-group/service-a 123 --dry-run    # 试跑，只打印不提交
+uv run huatuo review <project> <iid> --full              # 立即审查并提交
+uv run huatuo run                                        # 常驻：轮询 + 处理任务
+uv run huatuo poll                                       # 只轮询一次并入队，不处理
+uv run huatuo status <project> <iid>                     # 查看某个 MR 的问题状态与审计日志
+uv run huatuo ui [--port 8765]                           # 本地状态页
 ```
 
 ### Web 状态页
 
-`ai-cr ui` 提供一个只读的状态页，只监听 `127.0.0.1`。它展示任务队列、逐文件进度、每个 MR 的问题列表，以及每次模型调用的完整 prompt 与回复。（下面的截图使用的是虚构的演示数据。）
+`huatuo ui` 提供一个只读的状态页，只监听 `127.0.0.1`。它展示任务队列、逐文件进度、每个 MR 的问题列表，以及每次模型调用的完整 prompt 与回复。（下面的截图使用的是虚构的演示数据。）
 
 **任务队列与实时进度**
 
@@ -237,21 +241,25 @@ uv run ai-cr ui [--port 8765]                           # 本地状态页
 | `/ai-downgrade P2` | 调整级别（仅 human_reviewer） |
 | `/ai-review` | 全量重审并跳过流水线等待（任何人可用） |
 
+`/huatuo-confirm`、`/huatuo-accept`、`/huatuo-downgrade`、`/huatuo-review` 也可以作为别名使用。
+
 ## 部署（macOS launchd）
 
 `./deploy/install.sh` 会安装三个 launchd 任务；修改 `start-model.sh` 或 plist 后重新运行一次即可。
 
 | 任务 | 作用 | 日志 |
 |---|---|---|
-| `com.aicr.model` | 登录时启动 LM Studio 并加载模型，失败 60 秒后重试 | `~/.local/share/ai-cr/model.log` |
-| `com.aicr.agent` | 常驻轮询 + 审查，进程退出会自动重启 | `data/agent.log` |
-| `com.aicr.ui` | 只读状态页 http://127.0.0.1:8765 | `data/ui.log` |
+| `com.huatuo.model` | 登录时启动 LM Studio 并加载模型，失败 60 秒后重试 | `~/.local/share/huatuo/model.log` |
+| `com.huatuo.agent` | 常驻轮询 + 审查，进程退出会自动重启 | `data/agent.log` |
+| `com.huatuo.ui` | 只读状态页 http://127.0.0.1:8765 | `data/ui.log` |
 
 Agent 每一轮都会检查模型是否已按至少 32K 的上下文加载。未就绪时只轮询、不处理任务，任务保持排队，模型就绪后自动继续。接电源时 Agent 会阻止系统闲置睡眠（`caffeinate`）。
 
-模型脚本被安装到 `~/.local/share/ai-cr/`，因为 launchd 下的 zsh 没有读取 `~/Documents` 的权限。
+模型脚本被安装到 `~/.local/share/huatuo/`，因为 launchd 下的 zsh 没有读取 `~/Documents` 的权限。
 
-停止任务：`launchctl bootout gui/$(id -u)/com.aicr.agent`（模型同理）。
+从旧名称（`ai-cr`）升级：重新运行 `./deploy/install.sh` 即可。它会搬迁脚本目录，卸载旧的 `com.aicr.*` 任务，并安装 `com.huatuo.*`。
+
+停止任务：`launchctl bootout gui/$(id -u)/com.huatuo.agent`（模型同理）。
 
 ## 问题生命周期
 
@@ -274,7 +282,7 @@ lint 问题不经模型复核，按 linter 映射级别（`errcheck`、`govet`�
 `golangci-lint` 需与仓库的 Go 版本匹配，例如仓库要求 Go 1.27 时：
 
 ```bash
-GOTOOLCHAIN=go1.27.1 GOBIN=~/.local/share/ai-cr/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+GOTOOLCHAIN=go1.27.1 GOBIN=~/.local/share/huatuo/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 ```
 
 ## 流水线门禁与合并门禁
