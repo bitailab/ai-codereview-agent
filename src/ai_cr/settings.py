@@ -61,6 +61,15 @@ class ReviewConfig(BaseModel):
     verify_votes: int = 1
     static_analysis: StaticAnalysisConfig = Field(default_factory=StaticAnalysisConfig)
     ignore: list[str] = Field(default_factory=list)
+    # 按仓库指定的忽略规则（由部署方集中管理）：{"group/project": ["deploy/*"]}
+    project_ignore: dict[str, list[str]] = Field(default_factory=dict)
+    # 是否采纳仓库内 .ai-review.yaml 的 ignore。它来自被审查的 MR 本身，开发者可借此跳过关键代码；
+    # 想完全由部署方控制时设为 false（仓库里的 rules 不受影响）
+    allow_repo_ignore: bool = True
+
+    def ignore_for(self, project_path: str, repo_ignore: list[str] | None = None) -> list[str]:
+        out = self.ignore + self.project_ignore.get(project_path, [])
+        return out + list(repo_ignore or []) if self.allow_repo_ignore else out
 
 
 class PipelineConfig(BaseModel):

@@ -131,6 +131,8 @@ uv run --no-project --with gguf gguf-new-metadata --chat-template-file deploy/qw
 | `review.passes` | 审查维度；想加快可只留一个 `all` |
 | `review.verify_votes` | 复核投票次数（奇数）。P0 固定多数票 |
 | `review.static_analysis` | `golangci-lint` 设置与级别映射 |
+| `review.project_ignore` | 按仓库指定的忽略规则，由部署方集中管理，例如 `my-group/service-a: ["deploy/*"]` |
+| `review.allow_repo_ignore` | 是否采纳仓库内 `.ai-review.yaml` 的 `ignore`（默认 `true`） |
 | `pipeline` | 审查前是否等待 CI |
 | `lifecycle.auto_approve` | 是否自动 approve / unapprove |
 | `lifecycle.auto_merge` | approve 之后自动合并，**默认关闭** |
@@ -147,6 +149,21 @@ rules:
 ```
 
 仓库根目录的 `CLAUDE.md` / `AGENTS.md` 会作为规范注入。
+
+### 集中配置跳过的文件
+
+规则使用 `fnmatch`，同时匹配完整路径和文件名，`*` 也可以跨目录。要跳过某个项目的 CD 脚本，把它们写进 `config.yaml`，开发者无法修改：
+
+```yaml
+review:
+  project_ignore:
+    my-group/service-a:
+      - "deploy/*"       # 仓库根目录的 deploy/
+      - "*/deploy/*"     # 子目录下的 deploy/
+  allow_repo_ignore: false
+```
+
+`.ai-review.yaml` 是从 MR 自己的 head 提交里读取的，开发者可以借它的 `ignore` 把代码排除在审查之外。设置 `allow_repo_ignore: false` 后会忽略这份列表，只由 `config.yaml` 决定（仓库里的 `rules` 仍然生效）。被忽略的文件既不审查也不 lint，也不占 `max_files` 的名额。
 
 ### 自动合并
 

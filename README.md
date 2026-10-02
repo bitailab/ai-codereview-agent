@@ -131,6 +131,8 @@ Key settings:
 | `review.passes` | Review dimensions; keep a single `all` for speed |
 | `review.verify_votes` | Verification votes (odd number). P0 always uses a majority vote |
 | `review.static_analysis` | `golangci-lint` settings and severity mapping |
+| `review.project_ignore` | Per-project ignore patterns managed centrally, e.g. `my-group/service-a: ["deploy/*"]` |
+| `review.allow_repo_ignore` | Honor the `ignore` list in a repository's `.ai-review.yaml` (default `true`) |
 | `pipeline` | Wait for CI before reviewing |
 | `lifecycle.auto_approve` | Approve or un-approve automatically |
 | `lifecycle.auto_merge` | Merge right after approving. **Off by default** |
@@ -147,6 +149,21 @@ rules:
 ```
 
 `CLAUDE.md` / `AGENTS.md` at the repository root is injected as coding guidelines.
+
+### Skipping files centrally
+
+Patterns use `fnmatch` and are matched against both the full path and the file name; `*` also crosses `/`. To skip a project's CD scripts, list them in `config.yaml`, where developers cannot change them:
+
+```yaml
+review:
+  project_ignore:
+    my-group/service-a:
+      - "deploy/*"       # deploy/ at the repository root
+      - "*/deploy/*"     # deploy/ in any subdirectory
+  allow_repo_ignore: false
+```
+
+`.ai-review.yaml` is read from the MR's own head commit, so a developer can use its `ignore` list to keep code out of review. Set `allow_repo_ignore: false` to disregard that list and let only `config.yaml` decide (the repository's `rules` still apply). Ignored files are neither reviewed nor linted, and do not count toward `max_files`.
 
 ### Auto-merge
 

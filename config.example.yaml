@@ -42,6 +42,11 @@ review:
       bodyclose: P1
       sqlclosecheck: P1
       default: P2
+  project_ignore:             # 按仓库忽略（部署方集中管理）；路径用 fnmatch，* 可跨目录
+    my-group/service-a:
+      - "deploy/*"            # 仓库根目录的 deploy/
+      - "*/deploy/*"          # 子目录下的 deploy/
+  allow_repo_ignore: true     # 是否采纳仓库内 .ai-review.yaml 的 ignore；设为 false 则开发者无法自行跳过文件
   ignore:
     - "*.lock"
     - "*.sum"

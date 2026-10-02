@@ -204,7 +204,7 @@ class Nodes:
             changed_since = set(mirror.changed_files(last, head))
             notes.append(f"增量审查：仅审查 `{last[:8]}..{head[:8]}` 之间有变化的文件。")
 
-        ignore = cfg.ignore + list(state["mr"].get("repo_ignore") or [])
+        ignore = cfg.ignore_for(pp, state["mr"].get("repo_ignore"))
         candidates: list[FileDiff] = []
         generated: list[str] = []
         for path, fd in diffs.items():
