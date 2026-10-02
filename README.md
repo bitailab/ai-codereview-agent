@@ -4,7 +4,7 @@
 
 **Automated GitLab merge request code review, powered by a local LLM.**
 
-Your code never leaves your machine.
+Self-hosted and privacy-first: your code and data stay on your own machine, with no external services involved.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-%E2%89%A53.12-blue.svg)](https://www.python.org/)
@@ -19,12 +19,13 @@ Your code never leaves your machine.
 
 `ai-cr` is a code review agent built on [LangGraph](https://github.com/langchain-ai/langgraph). It polls GitLab for merge requests, reviews each changed file along several dimensions, verifies its own findings to weed out false positives, posts inline discussions plus a summary, and automatically approves or un-approves the MR. It then tracks every finding through its whole lifecycle: dispute, escalation to a human, and fix verification.
 
-It runs entirely against a local, OpenAI-compatible model server (tested with LM Studio and Qwen3.6-35B-A3B), so no source code is sent to a third-party API.
+It runs entirely on your own hardware, against a local, OpenAI-compatible model server (tested with LM Studio and Qwen3.6-35B-A3B) and your own GitLab. It depends on no external service, and no source code is sent to a third-party API. See [Security and privacy](#security-and-privacy) for exactly what it contacts and stores.
 
 ## Table of contents
 
 - [Features](#features)
 - [How it works](#how-it-works)
+- [Security and privacy](#security-and-privacy)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
 - [Local model setup](#local-model-setup)
@@ -40,7 +41,7 @@ It runs entirely against a local, OpenAI-compatible model server (tested with LM
 
 ## Features
 
-- **Local-first.** Talks to any OpenAI-compatible endpoint; no code leaves your machine.
+- **Local and private by design.** Runs fully on your own machine with a local model; the only peers are your GitLab and your model server. No cloud API, no telemetry, no code leaves your environment.
 - **Multi-pass review.** Each file is reviewed along separate dimensions (correctness, robustness, security & performance). Tests and light files (proto, yaml, …) get their own cheaper checklists.
 - **Self-verification.** Every finding is re-checked by the model before it is posted. P0 findings always need a majority vote.
 - **Finding lifecycle.** Developers can reply "false positive" or "fixed"; the agent re-evaluates, resolves, reopens, or escalates to a human reviewer.
@@ -68,6 +69,36 @@ flowchart LR
 ```
 
 Jobs are consumed serially: the local model handles one MR at a time, so several MRs pushed together simply queue up and do not increase memory use.
+
+## Security and privacy
+
+`ai-cr` is designed for teams that cannot, or will not, send source code to a third party. Everything runs on your own machine, against your own GitLab and your own model. There is no SaaS component, no account, no license server and no telemetry.
+
+**What it talks to.** At runtime the only network peers are:
+
+| Peer | Why | Where it is set |
+|---|---|---|
+| Your GitLab (API, and `git` over SSH or HTTPS) | Read MRs and code; post comments, approve | `GITLAB_URL` in `.env`, `git_url_style` in `config.yaml` |
+| Your model server | Run the review | `LLM_BASE_URL` in `.env`, default `http://127.0.0.1:1234/v1` |
+
+Nothing else is contacted: no cloud LLM API, no package or model download, no analytics or crash reporting. The model weights and Python dependencies are fetched once during setup; after that the system works with no internet access, as long as your GitLab is reachable.
+
+**What stays on the machine.**
+- Code is read through bare mirrors under `data/mirrors/` and never copied anywhere else. Review state, findings and job history live in local SQLite files under `data/`.
+- Review results leave the machine only as comments, labels and approvals on your own GitLab.
+- The web UI listens on `127.0.0.1` only, is read-only, and loads no external fonts, scripts or images.
+- `.env` (holding the GitLab token) and `data/` are git-ignored.
+
+**What you should know and control.**
+- `data/llm_trace.db` stores the full prompt and reply of every model call, which means source code, for 7 days (`LLM_TRACE_DAYS`) so that the UI can show them. Set `LLM_TRACE=false` to turn this off, or protect `data/` with disk encryption and restrictive permissions.
+- Mirrors, worktrees and logs under `data/` also contain code. Treat the directory as sensitive.
+- Use a dedicated bot account whose token has only the access it needs. With `git_url_style: http` the token is passed to `git` as a request header; SSH avoids that.
+- `ai-cr` does not stop you from pointing `LLM_BASE_URL` at a remote endpoint. If you do, your code goes there. To enforce "local only", add an egress rule that allows just your GitLab host and `127.0.0.1`.
+- The model server is a separate program with its own network behavior. LM Studio, for example, may check for updates; configure it (or firewall it) as your policy requires. The claims in this section are about `ai-cr` itself.
+- LangChain's optional LangSmith tracing is off unless you set its environment variables (`LANGSMITH_*`); do not set them.
+- Repository content is untrusted input to the model. A comment or file in an MR can try to steer the review. Findings are verified and their severity is capped (for example test files stay at P2), and `config.yaml` can [pin which files are skipped](#skipping-files-centrally) so developers cannot opt code out of review.
+
+You can check the claims above yourself: the whole code base is small, and `grep -rn "http" src/` shows every place a URL is handled.
 
 ## Requirements
 
