@@ -16,6 +16,7 @@ from ..llm import (
     chat, clean_text, estimate_tokens, human, invoke_structured, invoke_text, raise_if_unavailable, render, system,
     with_think_mode,
 )
+from ..priority import rank_files
 from ..static_analysis import run_golangci
 from ..trace import set_step
 from . import render as R
@@ -223,7 +224,7 @@ class Nodes:
         if generated:
             notes.append(f"跳过 {len(generated)} 个自动生成的文件：" + "、".join(f"`{p}`" for p in generated[:20]))
         if len(candidates) > cfg.max_files:
-            candidates.sort(key=lambda f: ("_test." in f.path, -len(f.added_lines())))
+            candidates = rank_files(candidates, cfg.test_files, cfg.light_files)
             skipped = candidates[cfg.max_files:]
             candidates = candidates[: cfg.max_files]
             notes.append(f"改动文件过多，以下 {len(skipped)} 个文件未审查：" + "、".join(f"`{f.path}`" for f in skipped[:20]))

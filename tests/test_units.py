@@ -278,3 +278,33 @@ def test_previous_summary_strips_both_headers():
     for header in (R.HEADER, R.LEGACY_HEADER):
         out = "\n".join(R._previous_summary(f"{header}\n\n结论：APPROVE"))
         assert "###" not in out and "结论：APPROVE" in out
+
+
+def _fd(path, added, new_file=False):
+    from huatuo.diff_parser import DiffLine, FileDiff, Hunk
+
+    h = Hunk("@@ -1,1 +1,1 @@", [DiffLine("+", None, i + 1, t) for i, t in enumerate(added)])
+    return FileDiff(path, path, new_file=new_file, hunks=[h])
+
+
+def test_rank_files_weights_importance_not_just_size():
+    from huatuo.priority import rank_files
+
+    test_files, light = ["*_test.go"], ["*.yaml", "*.md", "*.json"]
+    boiler = _fd("app/model/entity.go", ["x := 1"] * 200)                       # 大段样板
+    auth = _fd("app/auth/token.go", ["func Verify(t string) bool { return true }"] * 5)  # 小改动但关键
+    conc = _fd("app/biz/cache.go", ["go func() { mu.Lock() }()", "m[k] = v"] * 3)
+    cfg = _fd("deploy/values.yaml", ["a: 1"] * 150)
+    big_test = _fd("app/biz/cache_test.go", ["t.Run()"] * 300)
+    ranked = [f.path for f in rank_files([boiler, cfg, big_test, conc, auth], test_files, light)]
+    assert ranked.index("app/auth/token.go") < ranked.index("app/model/entity.go")  # 关键小改动胜过大段样板
+    assert ranked.index("app/biz/cache.go") < ranked.index("app/model/entity.go")   # 并发信号 + 业务路径
+    assert ranked.index("deploy/values.yaml") > ranked.index("app/model/entity.go")  # 配置类降权
+    assert ranked[-1] == "app/biz/cache_test.go"  # 测试文件始终在最后，哪怕改动最大
+
+
+def test_rank_files_is_stable_for_ties():
+    from huatuo.priority import rank_files
+
+    a, b = _fd("pkg/b.go", ["x"] * 3), _fd("pkg/a.go", ["x"] * 3)
+    assert [f.path for f in rank_files([a, b], [], [])] == ["pkg/a.go", "pkg/b.go"]
