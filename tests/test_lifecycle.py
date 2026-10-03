@@ -398,3 +398,28 @@ def test_failed_review_replaces_reviewing_notice(env, monkeypatch):
     monkeypatch.setattr(worker, "run_job", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     worker.drain(env.deps, graph=None)
     assert "未能完成" in env.gl.notes[1] and "AI 正在审查" not in env.gl.notes[1]
+
+
+def test_mr_closed_during_review_aborts_without_publishing(env):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from huatuo import worker
+
+    graph = build_graph(env.deps, MemorySaver())
+    env.deps.store.enqueue(PP, 7, "new_push", {"head_sha": env.gl.head}, "push:y")
+    orig = env.gl.mr
+    calls = []
+
+    def mr(pp, iid):  # 第 1 次（load_context）仍是 opened，开始审查文件块时已被关闭
+        m = orig(pp, iid)
+        calls.append(1)
+        if len(calls) > 1:
+            m.attributes["state"] = "closed"
+        return m
+
+    env.gl.mr = mr
+    worker.drain(env.deps, graph)
+    job = env.deps.store.recent_jobs(1)[0]
+    assert job["status"] == "done" and not job["error"]
+    assert env.gl.discussions_created == [] and env.deps.store.findings(PP, 7) == []
+    assert "未能完成" not in "".join(env.gl.notes.values())  # 不当作失败处理

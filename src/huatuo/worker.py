@@ -12,6 +12,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from .deps import Deps
 from .graph.build import build_graph
+from .graph.nodes import MrNoLongerOpen
 from .graph.render import review_failed_body
 from .llm import is_unavailable, model_ready
 from .poller import poll_once
@@ -43,6 +44,9 @@ def drain(deps: Deps, graph) -> None:
     while job := deps.store.next_job():
         try:
             run_job(deps, graph, job, resume=True)
+            deps.store.finish_job(job["id"])
+        except MrNoLongerOpen as e:  # MR 已关闭/合并：任务直接结束，不标失败、不改评论
+            log.info("任务 #%s 中止：%s", job["id"], e)
             deps.store.finish_job(job["id"])
         except Exception as e:  # noqa: BLE001
             if is_unavailable(e):  # 模型中途被卸载/服务重启：放回队列，等模型就绪后从 checkpoint 继续
