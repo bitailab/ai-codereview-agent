@@ -18,6 +18,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from .deps import Deps
 from .graph.build import build_graph
 from .llm import model_ready
+from .quality import quality_stats
 from .trace import TraceReader
 
 log = logging.getLogger(__name__)
@@ -197,6 +198,10 @@ def make_handler(ui: UI):
                     self._send(200, PAGE.encode(), "text/html; charset=utf-8")
                 elif u.path == "/api/overview":
                     self._json(ui.overview())
+                elif u.path == "/quality":
+                    self._send(200, QUALITY_PAGE.encode(), "text/html; charset=utf-8")
+                elif u.path == "/api/quality":
+                    self._json(quality_stats(ui.d.store.quality_rows()))
                 elif u.path == "/api/job":
                     data = ui.job(int(parse_qs(u.query)["id"][0]))
                     self._json(data if data else {"error": "not found"}, 200 if data else 404)
@@ -220,6 +225,43 @@ def serve_ui(deps: Deps, port: int = 8765) -> None:
     except KeyboardInterrupt:
         pass
 
+
+QUALITY_PAGE = r"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>华佗 质量</title>
+<style>
+:root { --bg:#f6f7f9; --panel:#fff; --text:#1d2330; --muted:#6b7385; --line:#e3e6ec; --ok:#1f9d55; --warn:#c27c0e; --bad:#d23c3c; }
+@media (prefers-color-scheme: dark) { :root { --bg:#14161b; --panel:#1c1f26; --text:#e6e8ee; --muted:#9098a9; --line:#2c313b; --ok:#3fbf7f; --warn:#e0a33a; --bad:#f06a6a; } }
+body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif; padding:16px; }
+a { color:inherit; } h1 { font-size:16px; margin:0 0 12px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px; overflow-x:auto; }
+.card h2 { font-size:14px; margin:0 0 10px; } .muted { color:var(--muted); font-size:12px; }
+table { border-collapse:collapse; width:100%; } th,td { text-align:right; padding:5px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+th:first-child,td:first-child { text-align:left; } th { color:var(--muted); font-weight:500; }
+.big { font-size:28px; font-weight:600; }
+</style></head><body>
+<h1>华佗 审查质量 <a class="muted" href="/">← 返回状态页</a></h1>
+<div id="root" class="muted">加载中…</div>
+<script>
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct = p => p == null ? "—" : (p * 100).toFixed(0) + "%";
+const color = p => p == null ? "" : p >= 0.8 ? "var(--ok)" : p >= 0.6 ? "var(--warn)" : "var(--bad)";
+function table(title, rows) {
+  return `<div class="card"><h2>${title}</h2><table><tr><th></th><th>总数</th><th>有效</th><th>误报</th><th>建议类撤回</th><th>未决</th><th>精确率</th></tr>` +
+    rows.map(r => `<tr><td>${esc(r.key)}</td><td>${r.total}</td><td>${r.valid}</td><td>${r.false_positive}</td><td>${r.advisory}</td><td>${r.pending}</td>` +
+      `<td style="color:${color(r.precision)}">${pct(r.precision)}${r.decided < 5 && r.decided ? " <span class=muted>(n=" + r.decided + ")</span>" : ""}</td></tr>`).join("") + `</table></div>`;
+}
+fetch("/api/quality").then(r => r.json()).then(d => {
+  const o = d.overall;
+  document.getElementById("root").className = "";
+  document.getElementById("root").innerHTML =
+    `<div class="card"><div class="big" style="color:${color(o.precision)}">${pct(o.precision)}</div>
+     <div>精确率 = 有效 ${o.valid} / (有效 ${o.valid} + 误报 ${o.false_positive})，共 ${o.total} 条发现，${o.pending} 条未决，${o.advisory} 条为“仍建议调整”的 P2 撤回（不计入）。</div>
+     <div class="muted">有效：已修复 / 人工放行 / 延期。误报：开发者或人工认为华佗错了而撤回。样本很小时（n&lt;5）仅供参考；
+     开发者可能为省事而修了非问题，也可能被说服了真问题，需配合抽样人工标注校准。</div></div>` +
+    table("按严重度", d.severity) + table("按类别", d.category) + table("按项目", d.project) + table("按周", d.week);
+});
+</script></body></html>"""
 
 PAGE = r"""<!doctype html>
 <html lang="zh-CN">
@@ -290,6 +332,7 @@ pre { background: var(--code); padding: 8px 10px; border-radius: 6px; overflow-x
   <span class="pill" id="model">模型…</span>
   <span class="pill" id="counts"></span>
   <span class="pill muted" id="updated"></span>
+  <a class="pill" href="/quality" style="margin-left:auto;text-decoration:none;color:inherit">质量统计</a>
 </header>
 <div class="layout">
   <aside id="jobs"></aside>

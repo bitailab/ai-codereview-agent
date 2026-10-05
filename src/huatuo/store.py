@@ -288,6 +288,13 @@ class Store:
         ).fetchall()
         return [dict(r) | {"finding": json.loads(r["finding"])} for r in rows]
 
+    # ---------------- 质量统计 ----------------
+    def quality_rows(self) -> list[dict]:
+        """每条发现一行，带最终状态与关闭原因，供精确率统计。"""
+        return [dict(r) for r in self._exec(
+            "SELECT project_path, mr_iid, severity, category, status, status_reason, created_at, dispute_rounds FROM findings"
+        ).fetchall()]
+
     # ---------------- notes ----------------
     def note_processed(self, note_id: int) -> bool:
         return self._exec("SELECT 1 FROM processed_notes WHERE note_id=?", (note_id,)).fetchone() is not None

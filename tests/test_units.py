@@ -308,3 +308,22 @@ def test_rank_files_is_stable_for_ties():
 
     a, b = _fd("pkg/b.go", ["x"] * 3), _fd("pkg/a.go", ["x"] * 3)
     assert [f.path for f in rank_files([a, b], [], [])] == ["pkg/a.go", "pkg/b.go"]
+
+
+def test_quality_stats_classification_and_precision():
+    from huatuo.quality import classify, quality_stats
+
+    def row(sev, st, reason="", cat="correctness", proj="g/p"):
+        return {"project_path": proj, "mr_iid": 1, "severity": sev, "category": cat, "status": st,
+                "status_reason": reason, "created_at": "2026-09-30T10:00:00+00:00", "dispute_rounds": 0}
+
+    rows = [row("P1", "FIXED"), row("P1", "FIXED"), row("P1", "WAIVED"),
+            row("P1", "WITHDRAWN", "🙆 接受解释，撤回该问题：xxx"),
+            row("P2", "WITHDRAWN", "💬 仍建议调整：xxx"),  # 仍认为有问题，不算误报
+            row("P0", "OPEN"), row("P0", "ESCALATED")]
+    assert [classify(r) for r in rows] == ["valid", "valid", "valid", "false_positive", "advisory", "pending", "pending"]
+    s = quality_stats(rows)
+    assert s["overall"]["precision"] == 0.75 and s["overall"]["pending"] == 2 and s["overall"]["advisory"] == 1
+    by_sev = {x["key"]: x for x in s["severity"]}
+    assert by_sev["P1"]["precision"] == 0.75 and by_sev["P0"]["precision"] is None  # P0 还没有已决的，不显示 0%
+    assert s["week"][0]["key"] == "2026-W40"
