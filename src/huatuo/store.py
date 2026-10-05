@@ -230,6 +230,13 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def escalated_findings(self) -> list[dict]:
+        """所有 MR 中等待人工裁决的发现。"""
+        return [dict(r) for r in self._exec(
+            "SELECT id, project_path, mr_iid, severity, file, line, title, status_reason, updated_at "
+            "FROM findings WHERE status='ESCALATED' ORDER BY updated_at DESC"
+        ).fetchall()]
+
     def finding_by_discussion(self, discussion_id: str) -> dict | None:
         row = self._exec("SELECT * FROM findings WHERE discussion_id=?", (discussion_id,)).fetchone()
         return dict(row) if row else None

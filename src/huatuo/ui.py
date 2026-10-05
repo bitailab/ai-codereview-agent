@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import sqlite3
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -109,6 +110,19 @@ class UI:
                                check_same_thread=False)
         self.graph = build_graph(deps, SqliteSaver(conn))
         self.trace = TraceReader(deps.cfg.data_path / "llm_trace.db")
+        self._mr_state: dict[tuple[str, int], tuple[float, str]] = {}  # (项目, iid) -> (查询时间, state)
+
+    def _mr_is_open(self, pp: str, iid: int) -> bool:
+        """MR 是否仍为 opened；状态缓存 60 秒，查询失败时按仍打开处理（宁可多提醒）。"""
+        hit = self._mr_state.get((pp, iid))
+        if not hit or time.time() - hit[0] > 60:
+            try:
+                hit = (time.time(), self.d.gl.mr(pp, iid).attributes.get("state"))
+            except Exception as e:  # noqa: BLE001
+                log.warning("%s!%s 查询 MR 状态失败，仍显示提醒: %s", pp, iid, e)
+                return True
+            self._mr_state[(pp, iid)] = hit
+        return hit[1] == "opened"
 
     def mr_url(self, pp: str, iid: int) -> str:
         return f"{self.d.settings.env.gitlab_url.rstrip('/')}/{pp}/-/merge_requests/{iid}"
@@ -123,6 +137,9 @@ class UI:
                      | {"error": (j["error"] or "")[:200]} for j in jobs],
             "waiting": [{"project_path": w["project_path"], "mr_iid": w["mr_iid"], "notice": w.get("pipeline_notice"),
                          "url": self.mr_url(w["project_path"], w["mr_iid"])} for w in self.d.store.waiting_pipeline()],
+            "needs_human": [f | {"url": self.mr_url(f["project_path"], f["mr_iid"])}
+                            for f in self.d.store.escalated_findings()
+                            if self._mr_is_open(f["project_path"], f["mr_iid"])],
         }
 
     def _graph_state(self, job_id: int) -> dict:
@@ -322,6 +339,11 @@ pre { background: var(--code); padding: 8px 10px; border-radius: 6px; overflow-x
 .calls td.step { word-break: break-all; }
 .calls .bad { color: var(--bad); }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
+.alert { margin: 0; padding: 10px 16px; background: color-mix(in srgb, var(--bad) 14%, var(--panel));
+  border-bottom: 2px solid var(--bad); }
+.alert b { color: var(--bad); }
+.alert ul { margin: 6px 0 0; padding-left: 20px; }
+.alert code { background: var(--code); padding: 0 4px; border-radius: 4px; }
 .spin { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -334,6 +356,7 @@ pre { background: var(--code); padding: 8px 10px; border-radius: 6px; overflow-x
   <span class="pill muted" id="updated"></span>
   <a class="pill" href="/quality" style="margin-left:auto;text-decoration:none;color:inherit">质量统计</a>
 </header>
+<div class="alert" id="alert" hidden></div>
 <div class="layout">
   <aside id="jobs"></aside>
   <main id="main"><div class="empty">加载中…</div></main>
@@ -405,6 +428,14 @@ function renderOverview(o) {
   document.getElementById("counts").textContent =
     `进行中 ${o.counts.running} · 排队 ${o.counts.pending} · 失败 ${o.counts.failed}` +
     (o.waiting.length ? ` · 等流水线 ${o.waiting.length}` : "");
+  const nh = o.needs_human || [], al = document.getElementById("alert");
+  al.hidden = !nh.length;
+  document.title = (nh.length ? `(${nh.length}) ` : "") + "华佗 状态";
+  al.innerHTML = nh.length ? `<b>⚠ ${nh.length} 个问题待你裁决</b>
+    <span class="muted">（在 MR 评论中回复 <code>/ai-confirm</code> 或 <code>/ai-accept</code>，或直接 resolve 讨论）</span><ul>` +
+    nh.map(f => `<li><a href="${esc(f.url)}" target="_blank">${esc(f.project_path.split("/").pop())}!${f.mr_iid}</a>
+      <span class="sev ${f.severity}">${f.severity}</span> ${esc(f.title)}
+      <span class="muted">${esc(f.file || "")}${f.line ? ":" + f.line : ""}${f.status_reason ? " · " + esc(f.status_reason) : ""}</span></li>`).join("") + "</ul>" : "";
   document.getElementById("updated").textContent = "更新于 " + new Date().toLocaleTimeString("zh-CN", {hour12: false});
   if (!pinned) { const r = o.jobs.find(j => j.status === "running") || o.jobs[0]; if (r) selected = r.id; }
   document.getElementById("jobs").innerHTML = o.jobs.map(j => `
