@@ -1,0 +1,323 @@
+[
+ {
+  "id": "go-cockroach-24808",
+  "source": "goreal",
+  "repo": "cockroachdb/cockroach",
+  "ref": "refs/pull/24808/head",
+  "title": "compactor: don't block during suggestion in Start()",
+  "body": "When we `Start` the `Compactor`, it may already have received\n`Suggestion`s, deadlocking the previously blocking write to a full\nchannel.\n\nRelease note (bug fix): Fixed a scenario in which a node could deadlock\nwhile starting up.",
+  "files": [
+   "pkg/storage/compactor/compactor.go"
+  ],
+  "merged_at": "2018-04-16T19:02:44Z",
+  "url": "https://github.com/cockroachdb/cockroach/pull/24808",
+  "subtype": "Communication Deadlock/Channel",
+  "kind": "blocking",
+  "pr": 24808
+ },
+ {
+  "id": "go-etcd-10492",
+  "source": "goreal",
+  "repo": "etcd-io/etcd",
+  "ref": "refs/pull/10492/head",
+  "title": "lease: fix deadlock with Renew lease when the checkpointor is set",
+  "body": "Signed-off-by: nolouch <nolouch@gmail.com>\r\n\r\nThere is a deadlock issue which block the write. when we renew a lease that have remaining TTL cause by the long TTL setting, it write `lease checkpointing` entry to raft and wait it apply, but apply this entry also need acquire the same lock which already acquired by `renew`, and then meet the deadlock until timeout.",
+  "files": [
+   "lease/lessor.go"
+  ],
+  "merged_at": "2019-03-06T18:23:58Z",
+  "url": "https://github.com/etcd-io/etcd/pull/10492",
+  "subtype": "Resource Deadlock/Double Locking",
+  "kind": "blocking",
+  "pr": 10492
+ },
+ {
+  "id": "go-grpc-go-1424",
+  "source": "goreal",
+  "repo": "grpc/grpc-go",
+  "ref": "refs/pull/1424/head",
+  "title": "Fix a goroutine leak in DialContext",
+  "body": "A leak happens when DialContext times out before a balancer returns any\r\naddresses or before a successful connection is established.\r\n\r\nThe loop in ClientConn.lbWatcher breaks and doneChan never gets closed.",
+  "files": [
+   "clientconn.go"
+  ],
+  "merged_at": "2017-08-04T20:40:51Z",
+  "url": "https://github.com/grpc/grpc-go/pull/1424",
+  "subtype": "Communication Deadlock/Channel",
+  "kind": "blocking",
+  "pr": 1424
+ },
+ {
+  "id": "go-grpc-go-3017",
+  "source": "goreal",
+  "repo": "grpc/grpc-go",
+  "ref": "refs/pull/3017/head",
+  "title": "grpclb: fix deadlock in grpclb connection cache",
+  "body": "Before the fix, if the timer to remove a SubConn fires at the same time\r\nNewSubConn cancels the timer, it caused a mutex leak and deadlock.",
+  "files": [
+   "balancer/grpclb/grpclb_util.go"
+  ],
+  "merged_at": "2019-09-10T19:40:48Z",
+  "url": "https://github.com/grpc/grpc-go/pull/3017",
+  "subtype": "Resource Deadlock/Double Locking",
+  "kind": "blocking",
+  "pr": 3017
+ },
+ {
+  "id": "go-kubernetes-26980",
+  "source": "goreal",
+  "repo": "kubernetes/kubernetes",
+  "ref": "refs/pull/26980/head",
+  "title": "processor listener: fix locking in pop()",
+  "body": "Currently the lock in processorListener is used to guard pendingNotifications. But in pop, it also locks around on select chan. This will block the goroutine with lock acquired.\n\nThis PR changes the lock to guard the correct section only.\n",
+  "files": [
+   "pkg/controller/framework/shared_informer.go"
+  ],
+  "merged_at": "2016-06-13T00:59:09Z",
+  "url": "https://github.com/kubernetes/kubernetes/pull/26980",
+  "subtype": "Mixed Deadlock/Channel & Lock",
+  "kind": "blocking",
+  "pr": 26980
+ },
+ {
+  "id": "go-kubernetes-70277",
+  "source": "goreal",
+  "repo": "kubernetes/kubernetes",
+  "ref": "refs/pull/70277/head",
+  "title": "Fix goroutine leak of wait.poller",
+  "body": "<!--  Thanks for sending a pull request!  Here are some tips for you:\r\n1. If this is your first time, read our contributor guidelines https://git.k8s.io/community/contributors/guide#your-first-contribution and developer guide https://git.k8s.io/community/contributors/devel/development.md#development-guide\r\n2. Please label this pull request according to what type of issue you are addressing, especially if this is a release targeted pull request. For reference on required PR/issue labels, read here:\r\nhttps://git.k8s.io/community/contributors/devel/release.md#issue-kind-label\r\n3. Ensure you have added or ran the appropriate tests for your PR: https://git.k8s.io/community/contributors/devel/testing.md\r\n4. If you want *faster* PR reviews, read how: https://git.k8s.io/community/contributors/guide/pull-requests.md#best-practices-for-faster-reviews\r\n5. Follow the instructions for writing a release note: https://git.k8s.io/community/contributors/guide/release-notes.md\r\n6. If the PR is unfinished, see how to mark it: https://git.k8s.io/community/contributors/guide/pull-requests.md#marking-unfinished-pull-requests\r\n-->\r\n\r\n**What type of PR is this?**\r\n> Uncomment only one, leave it on its own line:\r\n>\r\n> /kind api-change\r\n/kind bug\r\n> /kind cleanup\r\n> /kind design\r\n> /kind documentation\r\n> /kind failing-test\r\n> /kind feature\r\n> /kind flake\r\n\r\n**What this PR does / why we need it**:\r\n\r\nThis PR fix a bug of `wait.poller()`. `wait.poller()` returns a function with type WaitFunc. the functi",
+  "files": [
+   "staging/src/k8s.io/apimachinery/pkg/util/wait/wait.go"
+  ],
+  "merged_at": "2018-12-27T06:29:48Z",
+  "url": "https://github.com/kubernetes/kubernetes/pull/70277",
+  "subtype": "Communication Deadlock/Channel",
+  "kind": "blocking",
+  "pr": 70277
+ },
+ {
+  "id": "go-syncthing-4829",
+  "source": "goreal",
+  "repo": "syncthing/syncthing",
+  "ref": "refs/pull/4829/head",
+  "title": "lib/nat: Fix clearAddresses/notify deadlock.",
+  "body": "### Purpose\r\n\r\nFix a deadlock when removing a NAT port mapping.\r\n\r\n`clearAddresses` write locks the struct and then calls `notify`. `notify` in turn tries to obtain a read lock on the same mutex. The result was a deadlock. This change unlocks the struct before calling `notify`.\r\n\r\n### Testing\r\n\r\nI am not sure how to automate the testing of this change.\r\n\r\n### Authorship\r\n\r\nGraham Miln (grahammiln) <graham.miln@miln.eu>",
+  "files": [
+   "lib/nat/structs.go"
+  ],
+  "merged_at": "2018-03-21T07:02:33Z",
+  "url": "https://github.com/syncthing/syncthing/pull/4829",
+  "subtype": "Resource Deadlock/Double Locking",
+  "kind": "blocking",
+  "pr": 4829
+ },
+ {
+  "id": "go-cockroach-35501",
+  "source": "goreal",
+  "repo": "cockroachdb/cockroach",
+  "ref": "refs/pull/35501/head",
+  "title": "sql: fix data race in validateChecks",
+  "body": "fixes #35498 \r\n\r\nRelease note: None",
+  "files": [
+   "pkg/sql/backfill.go"
+  ],
+  "merged_at": "2019-03-07T17:46:42Z",
+  "url": "https://github.com/cockroachdb/cockroach/pull/35501",
+  "subtype": "",
+  "kind": "nonblocking",
+  "pr": 35501
+ },
+ {
+  "id": "go-kubernetes-82550",
+  "source": "goreal",
+  "repo": "kubernetes/kubernetes",
+  "ref": "refs/pull/82550/head",
+  "title": "Fix racy lazyEcrProvider updates",
+  "body": "\r\n<!--  Thanks for sending a pull request!  Here are some tips for you:\r\n\r\n1. If this is your first time, please read our contributor guidelines: https://git.k8s.io/community/contributors/guide#your-first-contribution and developer guide https://git.k8s.io/community/contributors/devel/development.md#development-guide\r\n2. Please label this pull request according to what type of issue you are addressing, especially if this is a release targeted pull request. For reference on required PR/issue labels, read here:\r\nhttps://git.k8s.io/community/contributors/devel/sig-release/release.md#issuepr-kind-label\r\n3. Ensure you have added or ran the appropriate tests for your PR: https://git.k8s.io/community/contributors/devel/sig-testing/testing.md\r\n4. If you want *faster* PR reviews, read how: https://git.k8s.io/community/contributors/guide/pull-requests.md#best-practices-for-faster-reviews\r\n5. Follow the instructions for writing a release note: https://git.k8s.io/community/contributors/guide/release-notes.md\r\n6. If the PR is unfinished, see how to mark it: https://git.k8s.io/community/contributors/guide/pull-requests.md#marking-unfinished-pull-requests\r\n-->\r\n\r\n**What type of PR is this?**\r\n/kind bug\r\n\r\n**What this PR does / why we need it**: There is a race in the ECR credentials provider kubernetes 1.11-1.13 and probably earlier that causes kubelet to immediately panic. It's not in 1.14.?+ because the ECR credentials provider was refactored and the patch for that was backported to 1.14 ",
+  "files": [
+   "pkg/credentialprovider/aws/aws_credentials.go"
+  ],
+  "merged_at": "2019-09-13T22:22:01Z",
+  "url": "https://github.com/kubernetes/kubernetes/pull/82550",
+  "subtype": "",
+  "kind": "nonblocking",
+  "pr": 82550
+ },
+ {
+  "id": "go-istio-8214",
+  "source": "goreal",
+  "repo": "istio/istio",
+  "ref": "refs/pull/8214/head",
+  "title": "Fix data race with read/write stats in lruCache",
+  "body": "As reported in: https://circleci.com/gh/istio/istio/166719",
+  "files": [
+   "pkg/cache/lruCache.go"
+  ],
+  "merged_at": "2018-08-24T17:08:10Z",
+  "url": "https://github.com/istio/istio/pull/8214",
+  "subtype": "",
+  "kind": "nonblocking",
+  "pr": 8214
+ },
+ {
+  "id": "ad-dasel-eee03aec",
+  "source": "advisory",
+  "repo": "TomWright/dasel",
+  "ref": "eee03aec28d4a33d6138098d065b7b37b85e3c55",
+  "title": "Dasel: Selector lexer panics on trailing whitespace in `parseCurRune`",
+  "body": "Same panic class as GHSA-m5j3-4634-c2vq and GHSA-m6xr-fvfg-5g64, sister site on the same function. Trigger is any selector ending in whitespace: `dasel query 'a '` panics at `selector/lexer/tokenize.go:60`.\n\nThe whitespace-skip loop right above (lines 55-57) advances `p.i` to `p.srcLen` when the input is all-whitespace or whitespace-trailing. The very next line reads `p.src[p.i]` without a bounds check.\n\n## Vulnerable code\n\n`selector/lexer/tokenize.go:53-74` (v3.11.0):\n\n```go\nfunc (p *Tokenizer) parseCurRune() (Token, error) {\n\t// Skip over whitespace\n\tfor p.i < p.srcLen && unicode.IsSpace(rune(p.src[p.i])) {\n\t\tp.i++\n\t}\n\n\t// Skip over comments\n\tif p.src[p.i] == '/' && p.i+1 < p.srcLen && p.src[p.i+1] == '/' {\n\t\t// ...\n```\n\nLines 69-71 right below already do the bounds check after the comment-skip path. The whitespace-only path slipped past it.\n\n## Reproduce\n\n```\n$ echo '{\"a\":1}' | dasel query -i json 'a '\npanic: runtime error: index out of range [2] with length 2\n\ngoroutine 1 [running]:\ngithub.com/tomwright/dasel/v3/selector/lexer.(*Tokenizer).parseCurRune(...)\n\tselector/lexer/tokenize.go:60\ngithub.com/tomwright/dasel/v3/selector/lexer.(*Tokenizer).Next(...)\ngithub.com/tomwright/dasel/v3/selector/lexer.(*Tokenizer).Tokenize(...)\ngithub.com/tomwright/dasel/v3/selector.Parse(...)\ngithub.com/tomwright/dasel/v3/execution.ExecuteSelector(...)\n```\n\nOther inputs that hit it: `'   '`, `$'a\\t'`, `$'a\\n'`, `'a ?? '`, `'a + '`. Any token (or no token) followed by whitespace.\n\nReachable ",
+  "files": [
+   "selector/lexer/tokenize.go"
+  ],
+  "merged_at": "2026-06-27T15:01:48Z",
+  "url": "https://github.com/TomWright/dasel/commit/eee03aec28d4a33d6138098d065b7b37b85e3c55",
+  "ghsa": "GHSA-65gg-g7rw-6cpc",
+  "severity": "medium",
+  "cwes": [
+   "CWE-129"
+  ]
+ },
+ {
+  "id": "ad-sipgo-769e4bc9",
+  "source": "advisory",
+  "repo": "emiago/sipgo",
+  "ref": "769e4bc958376e2363566c8f7042202b410becdc",
+  "title": "SIPGO: DoS via unvalidated WebSocket frame length",
+  "body": "### Summary\n\nThe WebSocket transport allocates a buffer from the frame payload length before validating its size, which can lead to an unauthenticated DoS.\n\n### Details\n\n`WSConnection.Read` allocates a buffer from the declared WebSocket frame length before reading the payload (https://github.com/emiago/sipgo/blob/v1.4.0/sip/transport_ws.go#L400):\n\n```go\ndata := make([]byte, header.Length)   // header.Length is client-controlled, up to 2^63-1 (int64)\n```\n\n- `NextFrame()` reads only the frame header and never checks the length: `wsutil.NewReader` is created with no [`MaxFrameSize`](https://pkg.go.dev/github.com/gobwas/ws@v1.3.2/wsutil#Reader.MaxFrameSize) (`0` = unlimited). `ParseMaxMessageLength` applies only downstream, not here.\n- A value above the max slice size (e.g. `2^63-1`) panics `make`. sipgo does not recover from this panic, so it crashes the whole server process.\n\n### PoC\n\nTested on emiago/sipgo v1.4.0 (latest).\n\nAfter a normal WebSocket handshake, send one masked text frame consisting of the header only (no payload), declaring a huge length. The allocation runs as soon as the header is read.\n\n```\n0x81                                            FIN + text opcode\n0xFF                                            MASK bit + length marker 127 (8-byte length follows)\n0x7F FF FF FF FF FF FF FF                        declared length = 2^63-1  ->  make panics (crash)\n<4-byte masking key>\n(no payload)\n```\n\nThis crashes the server process:\n\n```\npanic: runtime error: makeslice:",
+  "files": [
+   "sip/transport_ws.go"
+  ],
+  "merged_at": "2026-07-04T18:27:37Z",
+  "url": "https://github.com/emiago/sipgo/commit/769e4bc958376e2363566c8f7042202b410becdc",
+  "ghsa": "GHSA-8h6x-h86x-75wh",
+  "severity": "high",
+  "cwes": [
+   "CWE-789"
+  ]
+ },
+ {
+  "id": "ad-cloudreve-1c5cad6d",
+  "source": "advisory",
+  "repo": "cloudreve/cloudreve",
+  "ref": "1c5cad6dec7ec3037c6479e3a26a3909995d16a2",
+  "title": "Cloudreve: SSRF guard bypass: checkIP does not decode IPv6-transition wrappers (NAT64, IPv4-compatible, 6to4) reaching internal and cloud-metadata addresses",
+  "body": "**Summary**\n\nCloudreve's server-side request forgery guard `ValidateExternalURL` (`pkg/request/ssrf.go`) resolves a user-supplied URL host and rejects it when any resolved IP is a loopback, private, link-local, multicast, unspecified, CGNAT, or the cloud-metadata address. The classification is performed by `checkIP`, which uses Go's `net.IP` builtins (`IsLoopback`, `IsPrivate`, `IsLinkLocalUnicast`, ...) directly on the resolved address. These builtins inspect only the outer IPv6 address and do not decode IPv4-in-IPv6 transition wrappers. An attacker who controls a hostname's AAAA record (or, on a DNS64/NAT64 network, any hostname) can point the remote-download URL at a NAT64 well-known-prefix address (`64:ff9b::a.b.c.d`, RFC 6052), an IPv4-compatible address (`::a.b.c.d`, RFC 4291), or a 6to4 address (`2002:AABB:CCDD::`, RFC 3056) that wraps an internal IPv4. Go classifies these wrappers as ordinary global IPv6 addresses, so `checkIP` accepts them; the network then delivers the request to the embedded internal IPv4 (loopback, RFC 1918, or the cloud instance metadata service `169.254.169.254`). This bypasses the SSRF guard that was added to block direct access to internal services.\n\n**Affected component and versions**\n\n- Component: `pkg/request/ssrf.go` (`ValidateExternalURL` / `checkIP`), reached from the remote-download workflow `pkg/filemanager/workflows/remote_download.go` (`RemoteDownloadTask.createDownloadTask`, which passes the user-supplied `SrcUri` to `ValidateExtern",
+  "files": [
+   "pkg/request/ssrf.go"
+  ],
+  "merged_at": "2026-07-15T07:28:53Z",
+  "url": "https://github.com/cloudreve/cloudreve/commit/1c5cad6dec7ec3037c6479e3a26a3909995d16a2",
+  "ghsa": "GHSA-jvh5-97xg-v99f",
+  "severity": "medium",
+  "cwes": [
+   "CWE-697",
+   "CWE-918"
+  ]
+ },
+ {
+  "id": "ad-zot-7bb211bc",
+  "source": "advisory",
+  "repo": "project-zot/zot",
+  "ref": "7bb211bcd4352b90f3e99752607fbd1f050bf7ca",
+  "title": "zot: Bearer authentication maps DELETE to push scope, allowing unauthorized deletion",
+  "body": "### Summary\n\nA bearer token with only `pull` and `push` scopes can successfully delete manifests and blobs from a zot registry. The bearer authentication handler maps all non-GET/HEAD HTTP methods, including DELETE, to the `\"push\"` action, and the `DistSpecAuthzHandler` middleware is bypassed entirely for bearer-authenticated requests. This allows any client holding a push-only bearer token to delete arbitrary manifests and blobs within the token's repository scope, in violation of the [Docker Distribution Token Authentication Specification](https://distribution.github.io/distribution/spec/auth/scope/).\n\n### Details\n\nThe vulnerability exists in two interacting components:\n\n**1. Action Mapping Collapse (`pkg/api/authn.go:571–586`)**\n\nThe bearer authentication handler maps HTTP methods to token scope actions using a binary check:\n\n```go\naction := \"pull\"\nif m := request.Method; m != http.MethodGet && m != http.MethodHead {\n    action = \"push\"\n}\n```\n\nThis collapses DELETE, PUT, PATCH, and POST into a single `\"push\"` action. The `\"delete\"` action is never assigned.\n\n**2. Authorization Bypass for Bearer Auth (`pkg/api/authz.go:270–275, 318–323`)**\n\nWhen a request is authenticated via bearer token, the `DistSpecAuthzHandler` middleware, which performs fine-grained action inference (distinguishing `create`, `read`, `update`, and `delete`) is bypassed entirely:\n\n```go\nif err != nil || (authnMwCtx != nil && authnMwCtx.AuthnType == BEARER) {\n    next.ServeHTTP(response, request)\n    ret",
+  "files": [
+   "pkg/api/authn.go"
+  ],
+  "merged_at": "2026-06-24T05:37:29Z",
+  "url": "https://github.com/project-zot/zot/commit/7bb211bcd4352b90f3e99752607fbd1f050bf7ca",
+  "ghsa": "GHSA-qg67-7m6v-qg25",
+  "severity": "high",
+  "cwes": [
+   "CWE-285"
+  ]
+ },
+ {
+  "id": "ad-amqp091-go-6959423a",
+  "source": "advisory",
+  "repo": "rabbitmq/amqp091-go",
+  "ref": "6959423aa2784a1971e399175dfb2065dea0f3b0",
+  "title": "RabbitMQ amqp091-go: Silent Data Truncation and State Corruption via Shortstr Integer Overflow",
+  "body": "## Summary\nA data integrity and protocol corruption vulnerability exists in the AMQP client's property serialization logic. When encoding AMQP short string (`shortstr`) fields—such as identifiers, routing strings, and content metadata—the length of the string is explicitly cast to a fixed-size 8-bit unsigned integer (`uint8`). \n\nIf an application provides a property string exceeding 255 bytes, the length counter silently wraps around (e.g., a length of 300 wraps to 44). As a result, the parser writes only a truncated portion of the string into the outgoing connection buffer without returning an error. This leads to silent data corruption, broken RPC routing, and unpredictable broker-side state behavior.\n\n---\n\n## Vulnerability Details\n\n### Mechanism\nThe vulnerability resides in the wire-level serialization logic for application publishing properties:\n\n```go\n// write.go:246\nlength := uint8(len(b))  // wraps silently when len(b) > 255 (e.g., 300 -> 44)\n```\n\nBecause Go allows silent integer truncation during explicit type casting, lengths larger than $2^8 - 1$ lose their most significant bits. The underlying stream writer reads `length` to determine how many bytes to pull from the buffer. Because no error or boundary check accompanies this truncation, the application believes the full payload was transmitted successfully.\n\n### Affected Properties\nThis truncation behavior affects every standard AMQP field serialized as a `shortstr`:\n* `CorrelationId`\n* `ReplyTo`\n* `MessageId`\n* `E",
+  "files": [
+   "write.go"
+  ],
+  "merged_at": "2026-06-19T09:03:09Z",
+  "url": "https://github.com/rabbitmq/amqp091-go/commit/6959423aa2784a1971e399175dfb2065dea0f3b0",
+  "ghsa": "GHSA-j497-x9hr-x34x",
+  "severity": "critical",
+  "cwes": [
+   "CWE-190"
+  ]
+ },
+ {
+  "id": "mi-gin-4854",
+  "source": "mined",
+  "repo": "gin-gonic/gin",
+  "ref": "refs/pull/4854/head",
+  "title": "fix(context): load Keys under the mutex in Copy",
+  "body": "## Description\n\n`Context.Copy` now loads `c.Keys` and clones it while holding `c.mu.RLock`. `maps.Clone(nil)` returns nil, so the nil map needs no special casing.\n\nFixes #4853\n\n## Motivation / Bug Fixed\n\n`Copy` is documented as the pattern to pass a context to background goroutines. It loaded `c.Keys` before `RLock`, while `Set` stores that field under `Lock` when initializing the map. `go test -race` reports the unsynchronized access.\n\n## How Has This Been Tested?\n\nRegression test added in `context_test.go`:\n- `TestCopyConcurrentWithSet`\n\nRan:\n```text\ngo test -race -count=1 -run 'TestCopyConcurrentWithSet|TestContextCopy$' .\n```\nPASS (1.041s).",
+  "files": [
+   "context.go"
+  ],
+  "merged_at": "2026-09-25T06:01:38Z",
+  "url": "https://github.com/gin-gonic/gin/pull/4854",
+  "pr": 4854
+ },
+ {
+  "id": "mi-gin-4819",
+  "source": "mined",
+  "repo": "gin-gonic/gin",
+  "ref": "refs/pull/4819/head",
+  "title": "fix: reset skipped-nodes stack on getValue entry to prevent slice overflow panic [#4818]",
+  "body": "Fixes #4818\n\n## Root cause\n\nWith `HandleMethodNotAllowed = true`, `handleHTTPRequest` calls `getValue`\nonce per method tree in the `HandleMethodNotAllowed` loop, reusing the\nsame `c.skippedNodes` stack from the pooled Context. `getValue` pushes\nentries onto the stack via a raw reslice (`[:index+1]`) that cannot grow\npast `engine.maxSections`. Without resetting the stack on entry, residue\nfrom a previous tree accumulates until the next reslice exceeds capacity\nand panics with \"slice bounds out of range\".\n\n## Fix\n\nReset `*skippedNodes = (*skippedNodes)[:0]` at the top of `getValue` so\nevery call starts with an empty stack. This is the single point that\ncovers all callers, including the `HandleMethodNotAllowed` loop.\n\n## Tests\n\n- `TestIssue4818_skippedNodesOverflow_Panic`: original repro from the\n  issue — POST to a route that causes skippedNodes residue to exceed\n  `maxSections` capacity. Confirms no panic and 404 (correct).\n- `TestIssue4818_MethodNotAllowedStillWorks`: PATCH a path that only\n  has a GET route, confirming the `HandleMethodNotAllowed` loop still\n  produces a correct 405 with Allow header.\n- `TestIssue4818_MethodNotAllowedManyTrees`: stress test with 9 method\n  trees targeting a single GET-only path, verifying no overflow.",
+  "files": [
+   "tree.go"
+  ],
+  "merged_at": "2026-09-19T13:11:33Z",
+  "url": "https://github.com/gin-gonic/gin/pull/4819",
+  "pr": 4819
+ },
+ {
+  "id": "mi-prometheus-19796",
+  "source": "mined",
+  "repo": "prometheus/prometheus",
+  "ref": "refs/pull/19796/head",
+  "title": "storage/remote: fix data race between SetClient and in-flight sends",
+  "body": "`QueueManager.SetClient` updates `storeClient` under `clientMtx`, and `client()` already reads it under that lock. The send paths still touched `storeClient` directly when setting span attributes (and, for metadata, when calling `Store`), so a config reload that only swaps the client raced with shards that were already sending.\r\n\r\nThis showed up under Go 1.27's race detector when a caller (Loki's ruler WAL registry) called `ApplyConfig` / `SetClient` while remote-write shards were flushing. Prometheus `WriteStorage.ApplyConfig` always calls `SetClient` when the remote-write hash is unchanged, so even a no-op refresh is enough.\r\n\r\nThis PR snapshots the client once per attempt via `client()` and uses that pointer for `Name()`, `Endpoint()`, and `Store()` on the v1 sample, v2 sample, and v1 metadata paths.\r\n\r\n`TestSetClientRace` runs `SetClient` concurrently with sample (and v1 metadata) sends so `-race` fails if those reads are left unlocked.\r\n\r\n```release-notes\r\n[BUGFIX] Remote-write: Fix a possible data race between sending data and updating config",
+  "files": [
+   "storage/remote/queue_manager.go"
+  ],
+  "merged_at": "2026-09-23T17:13:15Z",
+  "url": "https://github.com/prometheus/prometheus/pull/19796",
+  "pr": 19796
+ },
+ {
+  "id": "mi-grpc-go-9357",
+  "source": "mined",
+  "repo": "grpc/grpc-go",
+  "ref": "refs/pull/9357/head",
+  "title": "balancer/ringhash: fix uint32 weight sum overflow in normalizeWeights",
+  "body": "`newRing` with two endpoints whose uint32 weights sum to 2^32 (e.g. an EDS locality weight of 2 times an endpoint weight of 2^30, which pass the per-locality and per-priority weight-sum checks):\r\n\r\n    ring.go: normalized endpoint weights is [{a +Inf ...} {b +Inf ...}]\r\n    ring.go: creating new ring of size 1024\r\n    (hangs)\r\n\r\n`normalizeWeights` sums endpoint weights into a `uint32`, so a total above `math.MaxUint32` wraps and can land on zero. The `weight / weightSum` divide then yields `+Inf`, `newRing` sets `targetHashes` to `+Inf`, and its `for currentHashes < targetHashes` loop never ends, growing the ring until the process is out of memory. Summing in `uint64` cannot wrap and stays non-zero, since every endpoint weight is at least 1.\r\n\r\nRELEASE NOTES: \r\n- balancer/ringhash: Fix a bug where the sum of endpoint weights exceeding `math.MaxUint32` overflows by accumulating weights in a uint64.\r\n\r\n",
+  "files": [
+   "balancer/ringhash/ring.go"
+  ],
+  "merged_at": "2026-09-24T20:51:18Z",
+  "url": "https://github.com/grpc/grpc-go/pull/9357",
+  "pr": 9357
+ },
+ {
+  "id": "mi-etcd-21375",
+  "source": "mined",
+  "repo": "etcd-io/etcd",
+  "ref": "refs/pull/21375/head",
+  "title": "Fix race between read index and leader change",
+  "body": "Fixes https://github.com/etcd-io/etcd/issues/20418\r\n\r\n/assign @ahrtr @fuweid \r\n\r\nFix is to guarantee that we prioritize reading from `leaderChangedNotifier` over `readStateC`\r\n\r\nhttps://onecat.medium.com/golang-select-behavior-13a5cd77ae94",
+  "files": [
+   "server/etcdserver/v3_server.go"
+  ],
+  "merged_at": "2026-02-26T14:07:30Z",
+  "url": "https://github.com/etcd-io/etcd/pull/21375",
+  "pr": 21375
+ }
+]
