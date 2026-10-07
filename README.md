@@ -261,6 +261,43 @@ Upgrading from the old name (`ai-cr`): re-run `./deploy/install.sh`. It moves th
 
 To stop a job: `launchctl bootout gui/$(id -u)/com.huatuo.agent` (the same for the model).
 
+## Development and releases
+
+Development and production are **two directories**. The `.env`, `config.yaml`, `prompts/` and `data/` the services read are all relative to the code directory (`ROOT` in `settings.py`), so isolation comes from the directory, not from a switch in the code.
+
+| | Development | Production |
+|---|---|---|
+| Location | Your working clone, e.g. `~/Documents/src/ai_cr` | A separate clone, e.g. `~/.local/share/huatuo/prod` (not under `~/Documents`: commands under launchd cannot read it) |
+| Code | Edit, commit, tag, push | Only pulls tagged releases; never edited by hand |
+| launchd jobs | Not installed | `WorkingDirectory` of `com.huatuo.*` points here |
+| `config.yaml` | Empty `projects` or test repos only; use `huatuo review --dry-run`, which writes nothing to GitLab | Real repositories |
+| `data/` | Development and benchmark data | Production `state.db`, mirrors, traces |
+
+Prompts are re-read from `prompts/` on every call, so files in the production directory must not be edited in place. Changes arrive only through a release.
+
+To release: commit in the development directory, `git tag v2026.10.08`, `git push --tags`, then run in the production directory:
+
+```bash
+deploy/release.sh v2026.10.08          # wait for an idle queue -> check out the tag -> uv sync -> restart agent and ui; rolls back if they do not come up
+deploy/release.sh v2026.10.08 --force  # do not wait for an idle queue (interrupts the running job, which is re-queued)
+```
+
+Releases are logged to `data/release.log` in the production directory. To roll back, release the previous tag.
+
+Creating the production directory for the first time:
+
+```bash
+git clone git@github.com:bitailab/ai-codereview-agent.git ~/.local/share/huatuo/prod
+cd ~/.local/share/huatuo/prod && git checkout <tag>
+cp <dev dir>/.env <dev dir>/config.yaml .
+# stop the services while the queue is idle and carry the state over (without state.db every MR looks new and is reviewed again; mirrors need not be copied, they are re-fetched)
+for s in agent ui; do launchctl bootout gui/$(id -u)/com.huatuo.$s; done
+mkdir -p data && cp <dev dir>/data/{state.db*,checkpoints.db*,llm_trace.db*} data/
+uv sync --frozen && ./deploy/install.sh   # re-renders the plists to point at the production directory
+```
+
+The nightly benchmark still runs from the development directory: it only stops and restores the production `com.huatuo.agent`, and writes its results to `data/bench/` in the development directory.
+
 ## Finding lifecycle
 
 | Situation | Agent behavior |

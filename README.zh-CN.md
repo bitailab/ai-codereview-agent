@@ -261,6 +261,43 @@ Agent 每一轮都会检查模型是否已按至少 32K 的上下文加载。未
 
 停止任务：`launchctl bootout gui/$(id -u)/com.huatuo.agent`（模型同理）。
 
+## 开发与发布
+
+开发和生产是**两个目录**。服务读取的 `.env`、`config.yaml`、`prompts/` 和 `data/` 都相对代码所在目录（`settings.py` 的 `ROOT`），所以隔离靠目录，不靠代码里的开关。
+
+| | 开发目录 | 生产目录 |
+|---|---|---|
+| 位置 | 日常工作的克隆，如 `~/Documents/src/ai_cr` | 单独的克隆，如 `~/.local/share/huatuo/prod`（不要放在 `~/Documents` 下，launchd 下的命令读不了） |
+| 代码 | 修改、提交、打 tag、推送 | 只拉取已打 tag 的版本，不手改 |
+| launchd 服务 | 不安装 | `com.huatuo.*` 的 `WorkingDirectory` 指向这里 |
+| `config.yaml` | `projects` 留空或只放测试仓库；用 `huatuo review --dry-run` 看结果，不写 GitLab | 真实仓库 |
+| `data/` | 开发与基准数据 | 生产的 `state.db`、镜像、trace |
+
+提示词每次调用都从 `prompts/` 重新读取，所以生产目录里不能直接改文件，改动必须通过发布进来。
+
+发布：在开发目录提交、`git tag v2026.10.08`、`git push --tags`，然后在生产目录运行：
+
+```bash
+deploy/release.sh v2026.10.08          # 等队列空闲 → 切到该 tag → uv sync → 重启 agent 和 ui；起不来自动回滚
+deploy/release.sh v2026.10.08 --force  # 不等队列空闲（会打断正在跑的任务，任务重新排队）
+```
+
+发布记录在生产目录的 `data/release.log`。回滚就是再发布上一个 tag。
+
+首次建立生产目录：
+
+```bash
+git clone git@github.com:bitailab/ai-codereview-agent.git ~/.local/share/huatuo/prod
+cd ~/.local/share/huatuo/prod && git checkout <tag>
+cp <开发目录>/.env <开发目录>/config.yaml .
+# 队列空闲时停服务，带上状态库（不带 state.db 会把所有 MR 当新的重审；mirrors 可以不搬，会重新拉取）
+for s in agent ui; do launchctl bootout gui/$(id -u)/com.huatuo.$s; done
+mkdir -p data && cp <开发目录>/data/{state.db*,checkpoints.db*,llm_trace.db*} data/
+uv sync --frozen && ./deploy/install.sh   # 重新渲染 plist，指向生产目录
+```
+
+夜间基准仍在开发目录运行：它只负责停止和恢复生产的 `com.huatuo.agent`，结果写在开发目录的 `data/bench/`。
+
 ## 问题生命周期
 
 | 场景 | Agent 行为 |
