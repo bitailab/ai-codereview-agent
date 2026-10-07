@@ -136,7 +136,8 @@ class UI:
             "jobs": [{k: j[k] for k in ("id", "project_path", "mr_iid", "kind", "status", "created_at", "updated_at")}
                      | {"error": (j["error"] or "")[:200]} for j in jobs],
             "waiting": [{"project_path": w["project_path"], "mr_iid": w["mr_iid"], "notice": w.get("pipeline_notice"),
-                         "url": self.mr_url(w["project_path"], w["mr_iid"])} for w in self.d.store.waiting_pipeline()],
+                         "url": self.mr_url(w["project_path"], w["mr_iid"])} for w in self.d.store.waiting_pipeline()
+                        if self._mr_is_open(w["project_path"], w["mr_iid"])],  # 已合并/关闭的 MR 不会再被审查，不算在等
             "needs_human": [f | {"url": self.mr_url(f["project_path"], f["mr_iid"])}
                             for f in self.d.store.escalated_findings()
                             if self._mr_is_open(f["project_path"], f["mr_iid"])],
