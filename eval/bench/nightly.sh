@@ -23,6 +23,12 @@ restore() {
     sleep 8
   done
   launchctl list | grep -q com.huatuo.agent && log "agent 已恢复" || log "警告：agent 未能恢复，请手动 launchctl bootstrap"
+  # 全部跑完后注销定时任务。必须放在恢复 agent 之后的最后一步：bootout 会连本脚本一起杀掉，之前放在前面导致 agent 一直没被恢复
+  if [ -n "${ALL_DONE:-}" ]; then
+    log "已注销定时任务"
+    rm -f ~/Library/LaunchAgents/com.huatuo.bench-nightly.plist
+    launchctl bootout gui/$(id -u)/com.huatuo.bench-nightly 2>/dev/null
+  fi
 }
 trap restore EXIT
 
@@ -39,7 +45,7 @@ done
 wait $PID 2>/dev/null
 uv run python eval/bench/summary.py $LABEL > data/bench/results/$LABEL.summary.txt 2>&1
 log "基准结束：$(grep '^ALL' data/bench/results/$LABEL.summary.txt)"
-# 只跑一次：成功跑完（没有超时）就注销这个定时任务
+# 只跑一次：成功跑完（没有超时）就标记，由 EXIT 时的 restore 在恢复 agent 之后注销这个定时任务
 if [ -f data/bench/results/$LABEL.jsonl ] && [ "$(wc -l < data/bench/results/$LABEL.jsonl)" -ge "$(ls -d data/bench/*/meta.json | wc -l)" ]; then
-  launchctl bootout gui/$(id -u)/com.huatuo.bench-nightly 2>/dev/null; rm -f ~/Library/LaunchAgents/com.huatuo.bench-nightly.plist; log "已注销定时任务"
+  ALL_DONE=1
 fi
