@@ -283,7 +283,7 @@ deploy/release.sh v2026.10.08          # wait for an idle queue -> check out the
 deploy/release.sh v2026.10.08 --force  # do not wait for an idle queue (interrupts the running job, which is re-queued)
 ```
 
-Releases are logged to `data/release.log` in the production directory. To roll back, release the previous tag.
+You can also release from the development directory with `HUATUO_PROD=~/.local/share/huatuo/prod deploy/release.sh <tag>`, so the script is not rewritten while it switches versions. Releases are logged to `data/release.log` in the production directory. To roll back, release the previous tag.
 
 Creating the production directory for the first time:
 

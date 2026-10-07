@@ -283,7 +283,7 @@ deploy/release.sh v2026.10.08          # 等队列空闲 → 切到该 tag → u
 deploy/release.sh v2026.10.08 --force  # 不等队列空闲（会打断正在跑的任务，任务重新排队）
 ```
 
-发布记录在生产目录的 `data/release.log`。回滚就是再发布上一个 tag。
+在开发目录里用 `HUATUO_PROD=~/.local/share/huatuo/prod deploy/release.sh <tag>` 也可以发布，脚本不会在切换版本时被改写。发布记录在生产目录的 `data/release.log`。回滚就是再发布上一个 tag。
 
 首次建立生产目录：
 

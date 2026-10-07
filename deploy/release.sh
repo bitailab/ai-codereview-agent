@@ -1,12 +1,13 @@
 #!/bin/zsh
 # 在生产目录发布指定版本（git tag）：等队列空闲 → 切到该 tag → 同步依赖 → 重启 agent 和 ui；起不来就回滚到上一个版本。
-# 用法（在生产目录里执行）：deploy/release.sh <tag> [--force]
+# 用法：deploy/release.sh <tag> [--force]。默认发布脚本所在的仓库；也可以在开发目录里用 HUATUO_PROD=<生产目录> 运行，
+#   这样脚本本身不会在切换版本时被改写（首次发布、生产目录的版本还没有本脚本时必须这样）。
 #   --force  不等队列空闲，直接重启（会打断正在跑的任务，任务会重新排队）
 # 开发在另一个目录里改代码、提交、打 tag 并 push；生产目录只拉取，不手改。
 set -eu
 TAG=${1:?用法: deploy/release.sh <tag> [--force]}
 FORCE=${2:-}
-REPO=$(cd "$(dirname "$0")/.." && pwd)
+REPO=${HUATUO_PROD:-$(cd "$(dirname "$0")/.." && pwd)}
 cd $REPO
 UID_=$(id -u)
 LOG=data/release.log; mkdir -p data
