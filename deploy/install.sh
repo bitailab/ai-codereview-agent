@@ -8,7 +8,11 @@ set -e
 cd "$(dirname "$0")"
 REPO=$(cd .. && pwd)
 UV=$(command -v uv)
-# 服务进程的 PATH：uv、go、golangci-lint 所在目录 + 系统默认目录
+# 服务进程的 PATH：uv、go、golangci-lint 所在目录 + 系统默认目录。
+# 静态分析需要 go 和 golangci-lint；找不到就直接报错，否则 launchd 下的服务会悄悄跳过 lint（只在日志里留一条警告）。
+for t in uv go golangci-lint; do
+  command -v $t >/dev/null || { echo "错误：PATH 中找不到 $t，服务将无法运行静态分析。请在能运行 $t 的终端里执行本脚本（当前 PATH=$PATH）。" >&2; exit 1; }
+done
 SVC_PATH=$(for t in uv go golangci-lint; do p=$(command -v $t) && dirname $p; done | awk '!s[$0]++' | paste -sd: -):/usr/bin:/bin:/usr/sbin:/sbin
 DEST=~/.local/share/huatuo
 # 从旧名称（ai-cr / com.aicr.*）迁移：搬走脚本目录（旧路径保留为软链接），卸载旧的 launchd 任务
