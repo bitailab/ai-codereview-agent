@@ -34,6 +34,7 @@ It runs entirely on your own hardware, against a local, OpenAI-compatible model 
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Deployment (macOS launchd)](#deployment-macos-launchd)
+- [Development and releases](#development-and-releases)
 - [Finding lifecycle](#finding-lifecycle)
 - [Static analysis](#static-analysis)
 - [Pipeline gate and merge gate](#pipeline-gate-and-merge-gate)
