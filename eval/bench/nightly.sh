@@ -3,7 +3,8 @@
 # 结果在 data/bench/results/nightly-<日期>.jsonl，汇总在同名 .summary.txt。日志在 data/bench/nightly.log。
 set -u
 REPO=${0:A:h:h:h}; cd $REPO
-# 可选环境变量：BENCH_LABEL（结果文件前缀，默认 nightly）、BENCH_CASES（空格分隔的用例 id，默认跑全部）
+# 可选环境变量：BENCH_LABEL（结果文件前缀，默认 nightly）、BENCH_CASES（空格分隔的用例 id，默认跑全部）、
+# BENCH_JOBS（空格分隔的多个评测，按顺序跑；每项是前缀，加 :fwd 表示负例模式，例如 "new-full neg:fwd"，设了就忽略 BENCH_LABEL）
 LABEL=${BENCH_LABEL:-nightly}-$(date +%F)
 LOG=data/bench/nightly.log; mkdir -p data/bench/results
 log() { echo "$(date '+%F %T') $*" >> $LOG; }
@@ -38,17 +39,21 @@ log "停止 agent，开始基准 $LABEL"
 launchctl bootout gui/$(id -u)/com.huatuo.agent 2>/dev/null; sleep 8
 zsh deploy/start-model.sh >> $LOG 2>&1 || { log "模型未就绪，放弃"; exit 1; }
 
-caffeinate -i uv run python eval/bench/run.py $LABEL ${=BENCH_CASES:-} >> data/bench/$LABEL.out 2>&1 &
-PID=$!
-while kill -0 $PID 2>/dev/null; do
-  [ $(date +%s) -gt $DEADLINE ] && { log "超时，中止基准"; pkill -P $PID; kill $PID; break; }
-  sleep 30
+ALL_DONE=1
+for job in ${=BENCH_JOBS:-${BENCH_LABEL:-nightly}}; do
+  name=${job%%:*}; mode=${job#*:}; [ "$mode" = "$job" ] && mode=""
+  LABEL=$name-$(date +%F); FLAGS=(); [ "$mode" = fwd ] && FLAGS=(--forward)
+  log "开始 $LABEL ${FLAGS[*]:-}"
+  caffeinate -i uv run python eval/bench/run.py $LABEL ${FLAGS[@]} ${=BENCH_CASES:-} >> data/bench/$LABEL.out 2>&1 &
+  PID=$!
+  while kill -0 $PID 2>/dev/null; do
+    [ $(date +%s) -gt $DEADLINE ] && { log "超时，中止基准"; pkill -P $PID; kill $PID; break; }
+    sleep 30
+  done
+  wait $PID 2>/dev/null
+  uv run python eval/bench/summary.py $LABEL > data/bench/results/$LABEL.summary.txt 2>&1
+  log "基准结束 $LABEL：$(grep -m1 -E '^(ALL|负例)' data/bench/results/$LABEL.summary.txt)"
+  # 只跑一次：全部评测都成功跑完（没有超时）才标记，由 EXIT 时的 restore 在恢复 agent 之后注销这个定时任务
+  if [ -n "${BENCH_CASES:-}" ]; then WANT=${#${=BENCH_CASES}}; else WANT=$(ls -d data/bench/*/meta.json | wc -l); fi
+  if [ ! -f data/bench/results/$LABEL.jsonl ] || [ "$(wc -l < data/bench/results/$LABEL.jsonl)" -lt "$WANT" ]; then ALL_DONE=""; fi
 done
-wait $PID 2>/dev/null
-uv run python eval/bench/summary.py $LABEL > data/bench/results/$LABEL.summary.txt 2>&1
-log "基准结束：$(grep '^ALL' data/bench/results/$LABEL.summary.txt)"
-# 只跑一次：成功跑完（没有超时）就标记，由 EXIT 时的 restore 在恢复 agent 之后注销这个定时任务
-if [ -n "${BENCH_CASES:-}" ]; then WANT=${#${=BENCH_CASES}}; else WANT=$(ls -d data/bench/*/meta.json | wc -l); fi
-if [ -f data/bench/results/$LABEL.jsonl ] && [ "$(wc -l < data/bench/results/$LABEL.jsonl)" -ge "$WANT" ]; then
-  ALL_DONE=1
-fi
