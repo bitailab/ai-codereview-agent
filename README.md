@@ -276,12 +276,14 @@ Development and production are **two directories**. The `.env`, `config.yaml`, `
 
 Prompts are re-read from `prompts/` on every call, so files in the production directory must not be edited in place. Changes arrive only through a release.
 
-To release: commit in the development directory, `git tag v2026.10.08`, `git push --tags`, then run in the production directory:
+To release: commit in the development directory, `git tag v0.2.0`, `git push --tags`, then run in the production directory:
 
 ```bash
-deploy/release.sh v2026.10.08          # wait for an idle queue -> check out the tag -> uv sync -> restart agent and ui; rolls back if they do not come up
-deploy/release.sh v2026.10.08 --force  # do not wait for an idle queue (interrupts the running job, which is re-queued)
+deploy/release.sh v0.2.0          # wait for an idle queue -> check out the tag -> uv sync -> restart agent and ui; rolls back if they do not come up
+deploy/release.sh v0.2.0 --force  # do not wait for an idle queue (interrupts the running job, which is re-queued)
 ```
+
+Versions use semantic versioning `vMAJOR.MINOR.PATCH`; production is currently `v0.1.0`. Bump PATCH for prompt tweaks and bug fixes (`v0.1.1`), MINOR when review behavior changes or a feature is added (`v0.2.0`). Several releases on one day never clash. Never move or re-create a tag once pushed: `git fetch --tags` in the production directory does not overwrite an existing tag of the same name, so ship a new version instead.
 
 You can also release from the development directory with `HUATUO_PROD=~/.local/share/huatuo/prod deploy/release.sh <tag>`, so the script is not rewritten while it switches versions. Releases are logged to `data/release.log` in the production directory. To roll back, release the previous tag.
 

@@ -276,14 +276,16 @@ Agent 每一轮都会检查模型是否已按至少 32K 的上下文加载。未
 
 提示词每次调用都从 `prompts/` 重新读取，所以生产目录里不能直接改文件，改动必须通过发布进来。
 
-发布：在开发目录提交、`git tag v2026.10.08`、`git push --tags`，然后在生产目录运行：
+发布：在开发目录提交、`git tag v0.2.0`、`git push --tags`，然后在生产目录运行：
 
 ```bash
-deploy/release.sh v2026.10.08          # 等队列空闲 → 切到该 tag → uv sync → 重启 agent 和 ui；起不来自动回滚
-deploy/release.sh v2026.10.08 --force  # 不等队列空闲（会打断正在跑的任务，任务重新排队）
+deploy/release.sh v0.2.0          # 等队列空闲 → 切到该 tag → uv sync → 重启 agent 和 ui；起不来自动回滚
+deploy/release.sh v0.2.0 --force  # 不等队列空闲（会打断正在跑的任务，任务重新排队）
 ```
 
-在开发目录里用 `HUATUO_PROD=~/.local/share/huatuo/prod deploy/release.sh <tag>` 也可以发布，脚本不会在切换版本时被改写。发布记录在生产目录的 `data/release.log`。回滚就是再发布上一个 tag。
+在开发目录里用 `HUATUO_PROD=~/.local/share/huatuo/prod deploy/release.sh <tag>` 也可以发布，脚本不会在切换版本时被改写。版本号用语义化版本 `v主.次.修订`，当前生产是 `v0.1.0`：改提示词、修 bug 加修订号（`v0.1.1`）；改变审查行为或新增功能加次版本号（`v0.2.0`）。同一天发多次也不冲突。tag 一旦推送就不要移动或重打：生产目录的 `git fetch --tags` 不会覆盖已有的同名 tag，出问题就发新版本。
+
+发布记录在生产目录的 `data/release.log`。回滚就是再发布上一个 tag。
 
 首次建立生产目录：
 
