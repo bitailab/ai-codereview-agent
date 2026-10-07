@@ -12,7 +12,8 @@ IDLE_WAIT_UNTIL=$(date -v+3H +%s)  # 最多等 3 小时让队列空闲，仍有�
 export PATH=/opt/homebrew/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 set -a; [ -f .env ] && source .env; set +a
 
-busy() { [ "$(sqlite3 data/state.db "select count(*) from jobs where status in ('running','pending')")" != "0" ]; }
+QUEUE_DB=${HUATUO_QUEUE_DB:-data/state.db}   # 线上队列的状态库；开发/生产分离后在生产目录里，由 plist 的 HUATUO_QUEUE_DB 指定
+busy() { [ "$(sqlite3 $QUEUE_DB "select count(*) from jobs where status in ('running','pending')")" != "0" ]; }
 while busy; do
   [ $(date +%s) -gt $IDLE_WAIT_UNTIL ] && { log "队列一直不空闲，放弃本次"; exit 0; }
   sleep 60
