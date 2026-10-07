@@ -7,7 +7,7 @@ from ..deps import Deps
 from .nodes import Nodes, route_event
 from .state import ReviewState
 
-FANOUT_KEYS = ("event", "mr", "diff_refs", "head_sha", "claude_md", "repo_rules", "intent", "findings")
+FANOUT_KEYS = ("event", "mr", "diff_refs", "head_sha", "claude_md", "repo_rules", "intent", "findings", "dry_run")
 
 
 def build_graph(deps: Deps, checkpointer=None):

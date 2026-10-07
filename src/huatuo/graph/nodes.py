@@ -300,24 +300,37 @@ class Nodes:
         except Exception as e:  # noqa: BLE001 提示失败不影响审查
             log.warning("发布“审查中”提示失败: %s", e)
 
-    def _ensure_open(self, pp: str, iid: int) -> None:
-        """审查耗时很长（数十分钟到数小时），期间 MR 可能被关闭或合并：此时中止，不再浪费模型时间，也不往已结束的 MR 发评论。
-        查询失败不影响审查（只是少一次检查）。"""
+    def _ensure_open(self, pp: str, iid: int, head: str = "", dry_run: bool = False) -> None:
+        """审查耗时很长（数十分钟到数小时），期间 MR 可能被关闭或合并：此时中止，不再浪费模型时间，也不往已结束的 MR 发新评论。
+        已发出的“正在审查”提示会原地改成“已退出审查”。查询失败不影响审查（只是少一次检查）。"""
         try:
             st = self.d.gl.mr(pp, iid).attributes.get("state")
         except Exception as e:  # noqa: BLE001
             log.warning("%s!%s 查询 MR 状态失败，继续审查: %s", pp, iid, e)
             return
         if st != "opened":
+            if not dry_run:
+                self._post_aborted_notice(pp, iid, head, st)
             raise MrNoLongerOpen(f"{pp}!{iid} 状态变为 {st}")
+
+    def _post_aborted_notice(self, pp: str, iid: int, head: str, mr_state: str) -> None:
+        store = self.d.store
+        note_id = store.mr_state(pp, iid).get("summary_note_id")
+        if not note_id:  # 没发过“正在审查”提示，就不新发评论
+            return
+        try:
+            body = R.review_aborted_body(head, mr_state, store.last_summary(pp, iid))
+            self.d.gl.upsert_note(pp, iid, note_id, body)
+        except Exception as e:  # noqa: BLE001 提示失败不影响中止
+            log.warning("更新“已退出审查”提示失败: %s", e)
 
     def review_file(self, payload: dict) -> dict:
         """单个文件块：先理解（可调用工具），再按维度逐轮审查。"""
         f = payload["file"]
         pp, iid = payload["event"]["project_path"], payload["event"]["mr_iid"]
-        self._ensure_open(pp, iid)
-        cfg = self.d.cfg.review
         head = payload["head_sha"]
+        self._ensure_open(pp, iid, head, payload.get("dry_run", False))
+        cfg = self.d.cfg.review
         mirror = self.d.mirror(pp)
         fd = self.d.mr_diff(pp, payload["diff_refs"]["base_sha"], head).get(f["path"])
         try:

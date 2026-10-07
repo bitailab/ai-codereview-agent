@@ -142,6 +142,19 @@ def reviewing_notice_body(head_sha: str, chunks: int, previous_summary: str | No
     return "\n".join(lines + _previous_summary(previous_summary))
 
 
+def review_aborted_body(head_sha: str, mr_state: str, previous_summary: str | None) -> str:
+    """审查中途 MR 被关闭/合并：把“正在审查”提示改成已退出，保留上一轮的审查结果。"""
+    word = {"merged": "已合并", "closed": "已关闭"}.get(mr_state, f"状态变为 {mr_state}")
+    lines = [
+        SUMMARY_MARKER,
+        BOT_MARKER,
+        HEADER,
+        "",
+        f"⏹️ **华佗已退出审查**：MR {word}，对版本 `{head_sha[:8]}` 的审查没有完成，不会继续。",
+    ]
+    return "\n".join(lines + _previous_summary(previous_summary))
+
+
 def review_failed_body(head_sha: str, previous_summary: str | None) -> str:
     lines = [
         SUMMARY_MARKER,

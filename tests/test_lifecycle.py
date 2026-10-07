@@ -423,3 +423,7 @@ def test_mr_closed_during_review_aborts_without_publishing(env):
     assert job["status"] == "done" and not job["error"]
     assert env.gl.discussions_created == [] and env.deps.store.findings(PP, 7) == []
     assert "未能完成" not in "".join(env.gl.notes.values())  # 不当作失败处理
+    # 已发出的“正在审查”提示原地改成“已退出审查”，不新增评论
+    assert len(env.gl.notes) == 1
+    note = "".join(env.gl.notes.values())
+    assert "已退出审查" in note and "已关闭" in note and "正在审查" not in note
