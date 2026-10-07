@@ -327,3 +327,31 @@ def test_quality_stats_classification_and_precision():
     by_sev = {x["key"]: x for x in s["severity"]}
     assert by_sev["P1"]["precision"] == 0.75 and by_sev["P0"]["precision"] is None  # P0 还没有已决的，不显示 0%
     assert s["week"][0]["key"] == "2026-W40"
+
+
+PURE_DELETE = """diff --git a/w.go b/w.go
+--- a/w.go
++++ b/w.go
+@@ -10,6 +10,3 @@ func writeShortstr(w io.Writer, s string) error {
+ 	b := []byte(s)
+-	if len(b) > 255 {
+-		return ErrShortstrTooLong
+-	}
+ 	length := uint8(len(b))
+ 	return write(w, length)
+"""
+
+
+def test_pure_deletion_has_change_anchors():
+    fd = parse_diff(PURE_DELETE)[0]
+    assert fd.added_lines() == set()
+    assert fd.changed_lines() == {10, 11}  # 删除点前后各一行
+    assert fd.removed_lines()[0] == (11, "\tif len(b) > 255 {")
+
+
+def test_locate_removed_finds_deleted_evidence_only():
+    from huatuo.graph.nodes import _locate_removed
+    fd = parse_diff(PURE_DELETE)[0]
+    assert _locate_removed(fd, "if len(b) > 255 {\n    return ErrShortstrTooLong\n}") == 11
+    assert _locate_removed(fd, "length := uint8(len(b))") is None  # 仍在文件中的代码不走这条路径
+    assert _locate_removed(None, "if len(b) > 255 {") is None

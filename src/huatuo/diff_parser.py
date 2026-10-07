@@ -37,6 +37,37 @@ class FileDiff:
     def added_lines(self) -> set[int]:
         return {ln.new_no for h in self.hunks for ln in h.lines if ln.kind == "+" and ln.new_no}
 
+    def deletion_anchors(self) -> dict[int, list[str]]:
+        """每处删除在新文件中的锚点行号（删除点前后各一行）-> 该处被删除的代码行。
+        纯删除型改动（删掉一个检查、一次加锁）没有新增行，问题只能锚定在这里。"""
+        out: dict[int, list[str]] = {}
+        for h in self.hunks:
+            for i, ln in enumerate(h.lines):
+                if ln.kind != "-":
+                    continue
+                prev = next((x.new_no for x in reversed(h.lines[:i]) if x.new_no), None)
+                nxt = next((x.new_no for x in h.lines[i + 1:] if x.new_no), None)
+                for n in {prev, nxt} - {None}:
+                    out.setdefault(n, []).append(ln.text)
+        return out
+
+    def changed_lines(self) -> set[int]:
+        """新增行 + 删除点附近的行：审查发现落在这些行附近才算“本次改动附近”。"""
+        return self.added_lines() | set(self.deletion_anchors())
+
+    def removed_lines(self) -> list[tuple[int, str]]:
+        """(锚点行号, 被删除的代码)，锚点取删除点之后的第一行（没有则取之前的最后一行）。"""
+        out: list[tuple[int, str]] = []
+        for h in self.hunks:
+            for i, ln in enumerate(h.lines):
+                if ln.kind != "-":
+                    continue
+                anchor = next((x.new_no for x in h.lines[i + 1:] if x.new_no), None) \
+                    or next((x.new_no for x in reversed(h.lines[:i]) if x.new_no), None)
+                if anchor:
+                    out.append((anchor, ln.text))
+        return out
+
     def position_for(self, new_line: int) -> dict | None:
         """返回 GitLab position 需要的 old_line/new_line；不在 diff 中返回 None。"""
         for h in self.hunks:

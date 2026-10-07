@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from ..deps import Deps
 from ..diff_parser import FileDiff
-from ..git_repo import clean_evidence, is_ignored, locate_evidence, locate_snippet, normalize_code
+from ..git_repo import _TRIVIAL, clean_evidence, is_ignored, locate_evidence, locate_snippet, normalize_code
 from ..llm import (
     chat, clean_text, estimate_tokens, human, invoke_structured, invoke_text, raise_if_unavailable, render, system,
     with_think_mode,
@@ -129,6 +129,21 @@ def _code_window(content: str | None, center: int | None, radius: int = 40) -> s
         return "（文件不存在）"
     center = center or 1
     return numbered(content, center - radius, center + radius)
+
+
+def _locate_removed(fd, evidence: str) -> int | None:
+    """证据引用的是本次删除的代码（head 里已经没有）：在被删除行里找，返回删除点的锚点行号。
+    “删掉了某个检查/加锁”的问题只能这样引用。至少 60% 的有效证据行要在被删除行中找到。"""
+    if fd is None:
+        return None
+    lines = [normalize_code(x) for x in clean_evidence(evidence).splitlines()]
+    lines = [x for x in lines if len(x) >= 4 and x not in _TRIVIAL]
+    removed = [(n, normalize_code(t)) for n, t in fd.removed_lines()]
+    if not lines or not removed:
+        return None
+    found = [min((n for n, t in removed if s == t or (len(s) >= 8 and s in t)), default=None) for s in lines]
+    found = [n for n in found if n is not None]
+    return min(found) if len(found) * 10 >= len(lines) * 6 else None
 
 
 def _keyword_intent(text: str) -> str:
@@ -348,7 +363,8 @@ class Nodes:
                 # 两步：先自由文本审查（不受 JSON 约束，思考质量更好），再把结论转成 JSON
                 msgs = [self._sys(), human(msg)]
                 review_text = invoke_text(msgs)
-                if re.search(r"确认的问题[：:]\s*无", review_text):
+                # 结尾写“无”且正文没有认定 P0/P1 才跳过；正文已决定列出 P0/P1 却在结尾写“无”的自相矛盾，仍交给转 JSON 一步
+                if re.search(r"确认的问题[：:]\s*无", review_text) and not re.search(r"P[01]", review_text):
                     continue
                 result = invoke_structured(FindingList, [*msgs, AIMessage(review_text), human(render("to_json", path=f["path"]))])
             except Exception as e:  # noqa: BLE001
@@ -427,17 +443,21 @@ class Nodes:
             if path not in cache:
                 cache[path] = mirror.show(head, path)
             content = cache[path]
+            fd = pos_diffs.get(path)
             loc = locate_evidence(content or "", r.get("evidence", ""), r.get("line"))
             r["evidence"] = clean_evidence(r.get("evidence", ""))
             if loc is None:
-                dropped += 1
-                log.info("丢弃（证据代码在文件中找不到）: %s L%s %s", path, r.get("line"), r["title"])
-                continue
-            span = len([x for x in r["evidence"].strip().splitlines() if x.strip()])
-            if not (loc <= (r.get("line") or 0) <= loc + span):
-                r["line"] = loc
-            fd = pos_diffs.get(path)
-            near_change = bool(fd) and any(abs(n - r["line"]) <= 3 for n in fd.added_lines())
+                loc = _locate_removed(fd, r["evidence"])
+                if loc is None:
+                    dropped += 1
+                    log.info("丢弃（证据代码在文件中找不到）: %s L%s %s", path, r.get("line"), r["title"])
+                    continue
+                r["line"] = loc  # 引用的是被删除的代码：锚定在删除点
+            else:
+                span = len([x for x in r["evidence"].strip().splitlines() if x.strip()])
+                if not (loc <= (r.get("line") or 0) <= loc + span):
+                    r["line"] = loc
+            near_change = bool(fd) and any(abs(n - r["line"]) <= 3 for n in fd.changed_lines())
             if not near_change:
                 # 模型读的是带完整函数上下文的 diff，容易把未改动的历史代码也报出来；只保留 P0（以普通讨论发布）
                 if r["severity"] != "P0":
