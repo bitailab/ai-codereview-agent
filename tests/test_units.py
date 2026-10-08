@@ -80,6 +80,15 @@ def test_clean_evidence():
     assert clean_evidence("cache[k] = v") == "cache[k] = v"
 
 
+def test_locate_evidence_fuzzy_prefers_occurrence_nearest_the_hint():
+    from huatuo.git_repo import locate_evidence
+    # 两个函数都有 `p.lock.Lock()`；证据带 `...` 占位符无法整段匹配，逐行模糊时必须取离 hint 最近的那处
+    content = ("func add() {\n\tp.lock.Lock()\n\tdefer p.lock.Unlock()\n\tp.queue = append(p.queue, x)\n}\n\n"
+               "func pop() {\n\tp.lock.Lock()\n\tdefer p.lock.Unlock()\n\tfor {\n\t\tselect {\n\t\tcase p.nextCh <- n:\n\t\t}\n\t}\n}\n")
+    ev = "p.lock.Lock()\n\tdefer p.lock.Unlock()\n\tfor {\n...\n\tcase p.nextCh <- n:"
+    assert locate_evidence(content, ev, 8) == 8  # pop 里的那处，而不是 add 里的第 2 行
+
+
 def test_locate_evidence_handles_escaped_and_fuzzy():
     from huatuo.git_repo import locate_evidence
     content = "package svc\n\nfunc Put(k string, v int) {\n\tgo func() {\n\t\tcache[k] = v\n\t}()\n}\n"

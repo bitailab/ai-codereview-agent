@@ -185,11 +185,11 @@ def locate_evidence(content: str, evidence: str, hint_line: int | None, window: 
     lo, hi = max(0, hint_line - 1 - window), min(len(file_lines), hint_line + window)
     found = []
     for s in lines:
-        for i in range(lo, hi):
-            fl = file_lines[i]
-            if s == fl or (len(s) >= 8 and s in fl) or (len(fl) >= 8 and fl in s):
-                found.append(i + 1)
-                break
+        # 同一行代码可能在窗口里出现多次（别的函数里的 `p.lock.Lock()`）：取离模型给的行号最近的那处，而不是第一处
+        hits = [i for i in range(lo, hi)
+                if s == file_lines[i] or (len(s) >= 8 and s in file_lines[i]) or (len(file_lines[i]) >= 8 and file_lines[i] in s)]
+        if hits:
+            found.append(min(hits, key=lambda i: abs(i + 1 - hint_line)) + 1)
     if len(found) * 10 >= len(lines) * 6:
         return min(found)
     return None
