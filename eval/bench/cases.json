@@ -13,7 +13,8 @@
   "url": "https://github.com/cockroachdb/cockroach/pull/24808",
   "subtype": "Communication Deadlock/Channel",
   "kind": "blocking",
-  "pr": 24808
+  "pr": 24808,
+  "topic": "concurrency"
  },
  {
   "id": "go-etcd-10492",
@@ -29,7 +30,8 @@
   "url": "https://github.com/etcd-io/etcd/pull/10492",
   "subtype": "Resource Deadlock/Double Locking",
   "kind": "blocking",
-  "pr": 10492
+  "pr": 10492,
+  "topic": "concurrency"
  },
  {
   "id": "go-grpc-go-1424",
@@ -45,7 +47,8 @@
   "url": "https://github.com/grpc/grpc-go/pull/1424",
   "subtype": "Communication Deadlock/Channel",
   "kind": "blocking",
-  "pr": 1424
+  "pr": 1424,
+  "topic": "concurrency"
  },
  {
   "id": "go-grpc-go-3017",
@@ -61,7 +64,8 @@
   "url": "https://github.com/grpc/grpc-go/pull/3017",
   "subtype": "Resource Deadlock/Double Locking",
   "kind": "blocking",
-  "pr": 3017
+  "pr": 3017,
+  "topic": "concurrency"
  },
  {
   "id": "go-kubernetes-26980",
@@ -77,7 +81,8 @@
   "url": "https://github.com/kubernetes/kubernetes/pull/26980",
   "subtype": "Mixed Deadlock/Channel & Lock",
   "kind": "blocking",
-  "pr": 26980
+  "pr": 26980,
+  "topic": "concurrency"
  },
  {
   "id": "go-kubernetes-70277",
@@ -93,7 +98,8 @@
   "url": "https://github.com/kubernetes/kubernetes/pull/70277",
   "subtype": "Communication Deadlock/Channel",
   "kind": "blocking",
-  "pr": 70277
+  "pr": 70277,
+  "topic": "concurrency"
  },
  {
   "id": "go-syncthing-4829",
@@ -109,7 +115,8 @@
   "url": "https://github.com/syncthing/syncthing/pull/4829",
   "subtype": "Resource Deadlock/Double Locking",
   "kind": "blocking",
-  "pr": 4829
+  "pr": 4829,
+  "topic": "concurrency"
  },
  {
   "id": "go-cockroach-35501",
@@ -125,7 +132,8 @@
   "url": "https://github.com/cockroachdb/cockroach/pull/35501",
   "subtype": "",
   "kind": "nonblocking",
-  "pr": 35501
+  "pr": 35501,
+  "topic": "concurrency"
  },
  {
   "id": "go-kubernetes-82550",
@@ -141,7 +149,8 @@
   "url": "https://github.com/kubernetes/kubernetes/pull/82550",
   "subtype": "",
   "kind": "nonblocking",
-  "pr": 82550
+  "pr": 82550,
+  "topic": "concurrency"
  },
  {
   "id": "go-istio-8214",
@@ -157,7 +166,8 @@
   "url": "https://github.com/istio/istio/pull/8214",
   "subtype": "",
   "kind": "nonblocking",
-  "pr": 8214
+  "pr": 8214,
+  "topic": "concurrency"
  },
  {
   "id": "ad-dasel-eee03aec",
@@ -319,5 +329,646 @@
   "merged_at": "2026-02-26T14:07:30Z",
   "url": "https://github.com/etcd-io/etcd/pull/21375",
   "pr": 21375
+ },
+ {
+  "source": "advisory",
+  "repo": "openbao/openbao",
+  "ref": "0f2d90c331f25d1c6cd108638da03f4c7bd949a8",
+  "ghsa": "GHSA-34fc-gh42-pj53",
+  "severity": "critical",
+  "cwes": [
+   "CWE-208"
+  ],
+  "title": "OpenBao's Recovery Mode Vulnerable To Token Leakage via Timing Attack",
+  "body": "### Impact\n\nWhen running in the highly privileged recovery mode, OpenBao was vulnerable to a timing attack against the single recovery token. This allowed an attacker to extract the recovery token and use it to perform operations against the OpenBao instance, including reading or modification of data.\n\n### Patches\n\nThis has been patched in OpenBao v2.6.0.",
+  "files": [
+   "http/logical.go"
+  ],
+  "merged_at": "2026-07-13T16:38:48Z",
+  "url": "https://github.com/openbao/openbao/commit/0f2d90c331f25d1c6cd108638da03f4c7bd949a8",
+  "id": "ad-openbao-0f2d90c3"
+ },
+ {
+  "source": "advisory",
+  "repo": "podman-container-tools/podman",
+  "ref": "6c431b73dbf8e4b20b778644d7a80caebdb75050",
+  "ghsa": "GHSA-4hq8-gpf5-8p68",
+  "severity": "high",
+  "cwes": [
+   "CWE-200"
+  ],
+  "title": "Podman: Malformed Image can trick podman run into leaking host environment variables into the container",
+  "body": "## Summary\n\nAn container image that contains a environment variable with just a key and no value can trick podman into passing that variable from the host into the container. This is made worse by the fact that using an asterisk (*) will cause podman to pass all host variables into the container. So essentially a malicious image can exfiltrate all podman environment variables that are set in the session from where the container is launched.\n\n## Details\n\npodman run allows `--env VAR1` or `--env VAR*` which will read the variable values from the current environment and then passes them into the container. However because the same parsing logic was reused for the image config env section that means that an image variable could also gain access to that.\n\n## Patch\n\nThat image spec requires the env variables to be in the form of `key=value`, so to address this invalid formatted variables get rejected and the container will not run.\n\nFixed in https://github.com/podman-container-tools/podman/commit/6c431b73dbf8e4b20b778644d7a80caebdb75050\n\n## Workaround\n\nDo not run untrusted images. Before running an image consider inspecting the config with `podman image inspect --format '{{.Config.Env}}' <image>` and check for any variables that do not have a value assigned.",
+  "files": [
+   "pkg/specgen/generate/container.go",
+   "pkg/specgen/generate/kube/kube.go"
+  ],
+  "merged_at": "2026-06-22T16:39:07Z",
+  "url": "https://github.com/podman-container-tools/podman/commit/6c431b73dbf8e4b20b778644d7a80caebdb75050",
+  "id": "ad-podman-6c431b73"
+ },
+ {
+  "source": "advisory",
+  "repo": "anycable/anycable",
+  "ref": "d2cbadec792f038f4695c84a65c0d957b0fde72c",
+  "ghsa": "GHSA-5p54-whvp-x327",
+  "severity": "medium",
+  "cwes": [
+   "CWE-345"
+  ],
+  "title": "AnyCable: Pusher REST API Does Not Verify Request Body MD5 Enabling Signed-Request Replay with Arbitrary Body",
+  "body": "### Summary\nThe Pusher-compatible REST API includes `body_md5` in the HMAC signature string but never computes or verifies the MD5 of the received HTTP body, allowing anyone who observes a signed request to replay it with an entirely different body.\n\n### Details\nIn `pusher/http.go`, the `Handler` function extracts `body_md5` from the URL query string (line 169) and includes it verbatim in `stringToSign` (line 175). It then verifies `HMAC(stringToSign, secret) == auth_signature`. After verification succeeds, `handleEvents` reads and parses `r.Body` (lines 201-212) without ever computing `md5(body)` and comparing it against the `body_md5` that was signed. The Pusher protocol specification explicitly requires the server to verify this digest to prevent body-substitution attacks. There is also no `auth_timestamp` staleness check, so replays are valid indefinitely.\n\n### PoC\n1. Capture a legitimate signed POST to `/apps/<app_id>/events?auth_key=K&auth_timestamp=T&auth_version=1.0&body_md5=LEGIT_MD5&auth_signature=SIG` carrying body `{\"name\":\"safe-event\",\"channel\":\"ch\",\"data\":\"...\"}` (e.g., from TLS-terminating load-balancer logs).\n2. Send a new request with the same query string parameters but a different body:\n   `{\"name\":\"injected-event\",\"channel\":\"admin\",\"data\":\"malicious-payload\"}`\n3. The server accepts the request (HMAC over `stringToSign` matches the original) and broadcasts the injected event to all subscribers of `admin`.\n\n### Impact\nAn attacker who can read any single sign",
+  "files": [
+   "pusher/http.go"
+  ],
+  "merged_at": "2026-06-29T16:01:37Z",
+  "url": "https://github.com/anycable/anycable/commit/d2cbadec792f038f4695c84a65c0d957b0fde72c",
+  "id": "ad-anycable-d2cbadec"
+ },
+ {
+  "source": "advisory",
+  "repo": "siyuan-note/siyuan",
+  "ref": "035bf9a8c311c6f8468f2f1054b4d5e1711787e2",
+  "ghsa": "GHSA-3cm4-ccvw-6xr6",
+  "severity": "medium",
+  "cwes": [
+   "CWE-200",
+   "CWE-862"
+  ],
+  "title": "SiYuan: /history/*path and /repo/diff/*path potentially exposing historical snapshots of data/.siyuan/publishAccess.json and data/templates/*",
+  "body": "### Summary\n`GHSA-c8r8-95hg-mp34` added a centralized guard,\n`util.IsForbiddenAbsPath()`, specifically to block access to a small\nset of sensitive files: `conf/conf.json` (plaintext\n`accessAuthCode`/API token/cookie key), `data/snippets/conf.json`,\nthe entire `data/templates/` directory, and\n`data/.siyuan/publishAccess.json` (plaintext publish-mode passwords).\nIt was applied to `kernel/api/file.go` and `kernel/mcp/tools/file.go`.\nTwo other routes in the same server that serve arbitrary files by path,\n`/history/*path` and `/repo/diff/*path`, construct their target paths\nindependently and were not updated to call this new guard. Since the\nrepo/history snapshot system's tracked root is `data/` (confirmed by\n`getSyncIgnoreLines()`, whose ignore file lives at\n`data/.siyuan/syncignore` with entries relative to `data/`), both\n`data/.siyuan/publishAccess.json` and `data/templates/*` fall within\nthe scope that can legitimately be captured in historical snapshots,\nmeaning a prior version of either file can exist in\n`util.HistoryDir`/the repo-diff temp checkout even after the live file\nhas been protected by the new guard. This is CWE-862 (Missing\nAuthorization) applied to a very recently introduced protection\nmechanism.\n\n### Details\n`kernel/server/serve.go`, `/history/*path` (around line 994):\n```go\nginServer.GET(\"/history/*path\", model.CheckAuth, model.CheckAdminRole, func(context *gin.Context) {\n    p := filepath.Join(util.HistoryDir, context.Param(\"path\"))\n    // 加密笔记本的历史是密文（.sy/asse",
+  "files": [
+   "kernel/server/serve.go",
+   "kernel/util/path_guard.go"
+  ],
+  "merged_at": "2026-08-16T03:40:02Z",
+  "url": "https://github.com/siyuan-note/siyuan/commit/035bf9a8c311c6f8468f2f1054b4d5e1711787e2",
+  "id": "ad-siyuan-035bf9a8"
+ },
+ {
+  "source": "advisory",
+  "repo": "siyuan-note/siyuan",
+  "ref": "256d73aa7f94aead7ba255b668e32c140af23137",
+  "ghsa": "GHSA-4wwp-f6gw-6qm5",
+  "severity": "medium",
+  "cwes": [
+   "CWE-552"
+  ],
+  "title": "SiYuan: TLS Private Keys Readable via getFile (Incomplete Blocklist)",
+  "body": "### Summary:\n`IsForbiddenAbsPath()` only blocks `conf/conf.json` by exact match. The TLS private key (conf/key.pem) and CA private key (conf/ca.key) live in the same conf/ directory and are absent from the blocklist. Any authenticated user can retrieve them via POST `/api/file/getFile`.\n\n### Root cause\n`kernel/util/path_guard.go`, `IsForbiddenAbsPath()` has no entry for TLS key material. The `getFile` handler at kernel/api/file.go:497 skips the blocklist for RoleAdministrator, and in v3.8.1 all authenticated users receive RoleAdministrator (no non-admin role is currently issued to direct API consumers). The files are generated on every boot regardless of whether TLS is active.\n\n### Steps to reproduce:\n```\n# No token required on a default no-auth-code instance\ncurl -s -X POST http://TARGET:6806/api/file/getFile \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"path\": \"/conf/key.pem\"}'\n```\n```\ncurl -s -X POST http://TARGET:6806/api/file/getFile \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"path\": \"/conf/ca.key\"}'\n```\n\n**Response:** Raw PEM private key bytes.\n\n<img width=\"927\" height=\"467\" alt=\"2026-08-19_14-19\" src=\"https://github.com/user-attachments/assets/12e0787f-6bfc-416a-b5ad-a22954e45c48\" />\n\n### Impact:\nOn deployments with TLS enabled (--ssl flag or NetworkServeTLS), possession of `key.pem` allows decryption of captured HTTPS traffic. Possession of `ca.key` allows signing certificates trusted by any client that imported SiYuan's locaprompts users to do). The files e",
+  "files": [
+   "kernel/api/file.go",
+   "kernel/util/path_guard.go"
+  ],
+  "merged_at": "2026-08-19T14:41:30Z",
+  "url": "https://github.com/siyuan-note/siyuan/commit/256d73aa7f94aead7ba255b668e32c140af23137",
+  "id": "ad-siyuan-256d73aa"
+ },
+ {
+  "source": "advisory",
+  "repo": "qax-os/excelize",
+  "ref": "ae2113b410e51f6a141c396a59eda8c42b91bc22",
+  "ghsa": "GHSA-5h23-36rv-pm65",
+  "severity": "medium",
+  "cwes": [
+   "CWE-20",
+   "CWE-129"
+  ],
+  "title": "Excelize: GetStyle panics on a negative fillId, borderId or fontId in styles.xml",
+  "body": "## Summary\n\n`File.GetStyle` indexes the fill, border and font tables with values taken straight out of `xl/styles.xml`, and the conditions gating those lookups check only the upper bound. A workbook whose `cellXfs` entry carries `fillId=\"-1\"`, `borderId=\"-1\"` or `fontId=\"-1\"` reaches a negative slice index and panics. excelize has no `recover()`, so the panic leaves `GetStyle` and takes the calling process with it.\n\nSame defect class as GHSA-48hm-4h8j-58fg, the negative shared-string index, in a different file. That one was fixed by adding the missing lower bound; these three sites still lack it.\n\n## Where it is\n\n`styles.go`, in `GetStyle`, lines 1683, 1686 and 1689:\n\n```go\nxf := s.CellXfs.Xf[idx]\nif extractStyleCondFuncs[\"fill\"](xf, s) {\n    f.extractFills(s.Fills.Fill[*xf.FillID], s, style)\n}\nif extractStyleCondFuncs[\"border\"](xf, s) {\n    f.extractBorders(s.Borders.Border[*xf.BorderID], s, style)\n}\nif extractStyleCondFuncs[\"font\"](xf, s) {\n    style.Font = extractFont(s.Fonts.Font[*xf.FontID])\n}\n```\n\nThe conditions, at lines 1171 to 1185, bound only the top:\n\n```go\n\"fill\": func(xf xlsxXf, s *xlsxStyleSheet) bool {\n    return (xf.ApplyFill == nil || (xf.ApplyFill != nil && *xf.ApplyFill)) &&\n        xf.FillID != nil && s.Fills != nil &&\n        *xf.FillID < len(s.Fills.Fill)\n},\n```\n\n`*xf.FillID < len(...)` is satisfied by any negative value. `FillID`, `BorderID` and `FontID` are `*int` unmarshalled directly from the `fillId`, `borderId` and `fontId` attributes, so the value",
+  "files": [
+   "styles.go"
+  ],
+  "merged_at": "2026-07-31T01:03:03Z",
+  "url": "https://github.com/qax-os/excelize/commit/ae2113b410e51f6a141c396a59eda8c42b91bc22",
+  "id": "ad-excelize-ae2113b4"
+ },
+ {
+  "source": "advisory",
+  "repo": "gardener/gardener",
+  "ref": "63751db97dca6cc5ee5f966d4963415de6ae5545",
+  "ghsa": "GHSA-gfjv-gqf2-c888",
+  "severity": "medium",
+  "cwes": [
+   "CWE-863"
+  ],
+  "title": "Gardener: Authorization Bypass via Group Subject Injection",
+  "body": "## Overview\nThe `manage-members` custom verb authorization check in the Gardener API server's `customverbauthorizer` admission plugin can be bypassed by adding `Group` or `ServiceAccount` subjects to a Project's member list. The check is documented as controlling \"human users or groups\", but the implementation only gates changes to `User`-kind subjects. A project admin (without `manage-members` permission) can add arbitrary Group subjects - including `system:authenticated` - granting all authenticated users full project-level access.\n## Technical Details\nThe official Gardener documentation at `docs/usage/project/projects.md:90-92` explicitly states:\n<img width=\"2090\" height=\"290\" alt=\"image\" src=\"https://github.com/user-attachments/assets/744f5d6f-1e03-47b5-9dc5-36f20b7e6f4b\" />\n\nHowever, the `mustCheckProjectMembers()` function at `admission.go` compares old and new member lists using `findHumanUsersWithRoles()`, which only tracks subjects where `isHumanUser()` returns true:\n```go\nfunc mustCheckProjectMembers(oldMembers, members []core.ProjectMember, owner *rbacv1.Subject, userInfo user.Info) bool {\n    if apiequality.Semantic.DeepEqual(oldMembers, members) {\n        return false\n    }\n    if userIsOwner(userInfo, owner) {\n        return false\n    }\n    var oldHumanUsers, newHumanUsers = findHumanUsersWithRoles(oldMembers), findHumanUsersWithRoles(members)\n    // ...\n    return !oldHumanUsers.Equal(newHumanUsers)\n}\n```\nThe `isHumanUser()` function at `admission.go` only matc",
+  "files": [
+   "plugin/pkg/global/customverbauthorizer/admission.go"
+  ],
+  "merged_at": "2026-06-18T07:09:38Z",
+  "url": "https://github.com/gardener/gardener/commit/63751db97dca6cc5ee5f966d4963415de6ae5545",
+  "id": "ad-gardener-63751db9"
+ },
+ {
+  "repo": "containerd/containerd",
+  "ref": "refs/pull/13260/head",
+  "pr": 13260,
+  "url": "https://github.com/containerd/containerd/pull/13260",
+  "title": "sandbox: forward Create fields, fix event topics",
+  "body": "## sandbox: forward Create fields, fix event topics\r\n\r\n### What\r\n\r\nFixes two bugs in the gRPC sandbox controller service and adds unit tests for the service.\r\n\r\n### Bug 1: Create silently dropped fields\r\n\r\nThe `controllerService.Create` method only forwarded the `options` field when calling the local controller. The `netns_path`, `rootfs`, and `annotations` fields from the gRPC request were silently discarded, causing clients using the gRPC proxy path to receive incomplete sandbox configurations.\r\n\r\nAll four `CreateOptions` fields are now forwarded:\r\n\r\n```go\r\nerr = ctrl.Create(ctx, sb,\r\n    sandbox.WithOptions(req.GetOptions()),\r\n    sandbox.WithNetNSPath(req.GetNetnsPath()),\r\n    sandbox.WithRootFS(mount.FromProto(req.GetRootfs())),\r\n    sandbox.WithAnnotations(req.GetAnnotations()),\r\n)\r\n```\r\n\r\n### Bug 2: Event topics missing leading `/`\r\n\r\nEvent topics were published as `\"sandboxes/create\"` instead of `\"/sandboxes/create\"`. The event exchange validates that topics start with `/`, so every `Publish` call returned an error to the caller. Fixed for three event-publishing methods: `Create`, `Start`, and `Wait`.\r\n\r\n### Testing\r\n\r\nAdded `controller_service_test.go` with unit tests exercising the happy path for all implemented RPC methods, field forwarding for `Create`, and error handling for invalid/unknown sandboxer names.",
+  "files": [
+   "plugins/services/sandbox/controller_service.go"
+  ],
+  "merged_at": "2026-04-22T21:48:08Z",
+  "source": "mined",
+  "id": "mi-containerd-13260"
+ },
+ {
+  "repo": "coredns/coredns",
+  "ref": "refs/pull/7997/head",
+  "pr": 7997,
+  "url": "https://github.com/coredns/coredns/pull/7997",
+  "title": "fix(dnssec): add defensive nil checks",
+  "body": "\r\n\r\n<!--\r\nThank you for contributing to CoreDNS!\r\nPlease provide the following information to help us make the most of your pull request:\r\n-->\r\n\r\n### 1. Why is this pull request needed and what does it do?\r\n\r\nAdd length checks for `req.Ns` before accessing `req.Ns[0]` in the Delegation and NameError/NoData code paths of `Sign()`.\r\n\r\nCurrently `response.Typify` guarantees `len(req.Ns) >= 1` for these response types. It requires SOA or NS records in the authority section to classify a response as such, so this cannot be triggered in practice. The guards are added as defense-in-depth in case Typify's classification logic changes in the future.\r\n\r\n### 2. Which issues (if any) are related?\r\n\r\nFixes #7991 \r\n\r\n### 3. Which documentation changes (if any) need to be made?\r\n\r\nNone.\r\n\r\n### 4. Does this introduce a backward incompatible change or deprecation?\r\n\r\nNo.",
+  "files": [
+   "plugin/dnssec/dnssec.go"
+  ],
+  "merged_at": "2026-04-01T21:19:55Z",
+  "source": "mined",
+  "id": "mi-coredns-7997"
+ },
+ {
+  "repo": "grafana/grafana",
+  "ref": "refs/pull/132520/head",
+  "pr": 132520,
+  "url": "https://github.com/grafana/grafana/pull/132520",
+  "title": "Provisioning: Fix duplicate metric registration panic in MT git client metrics",
+  "body": "## What\n\nFixes the `panic: duplicate metrics collector registration attempted` in the provisioning API server under multi-tenant (MT) deployments (also observed in `grafana-enterprise`, which drives the same OSS provider).\n\n## Why\n\n`git.RegisterClientMetrics` — added recently in #132165 (nanogit client metrics wiring) — built its collectors with `promauto.With(reg)`, which calls `reg.MustRegister` and **panics** if a collector with the same descriptor is already registered.\n\nIn MT the repository-extras provider (`ProvideProvisioningOSSRepositoryExtras` / operator `RepositoryExtras`) runs more than once against a **shared** Prometheus registry (per-tenant / multiple builder instances). The single-tenant path (`RegisterAPIService`) runs once, which is why it wasn't caught locally. It was the only one of the four metric registrations in that provider missing an idempotency guard — its siblings (`RegisterDecryptMetrics`, `RegisterOperationMetrics`, `RegisterFolderMetadataMetrics`) are all `sync.Once`-guarded precisely for this reason.\n\n## How\n\nRegister each collector via a small generic helper `registerOrExisting[T prometheus.Collector]`:\n\n- `reg.Register(c)`; on `prometheus.AlreadyRegisteredError`, return the already-registered collector (`ExistingCollector`) instead of panicking.\n- A genuine descriptor mismatch (same name, different labels) still panics — that's a real programming error.\n\nThis preserves the metric's deliberate **per-registry** design (distinct registries keep i",
+  "files": [
+   "apps/provisioning/pkg/repository/git/client_metrics.go"
+  ],
+  "merged_at": "2026-09-14T11:14:54Z",
+  "source": "mined",
+  "id": "mi-grafana-132520"
+ },
+ {
+  "repo": "containerd/containerd",
+  "ref": "refs/pull/12803/head",
+  "pr": 12803,
+  "url": "https://github.com/containerd/containerd/pull/12803",
+  "title": "[release/2.1] fix: sanitize error before gRPC return to prevent credential leak in pod events",
+  "body": "This is an automated cherry-pick of #12801\n\n/assign AkihiroSuda\n\n```release-note\nHardening: sanitize errors before returning via gRPC to prevent possible credential leaks in pod events\n```",
+  "files": [
+   "internal/cri/instrument/instrumented_service.go"
+  ],
+  "merged_at": "2026-01-21T19:45:49Z",
+  "source": "mined",
+  "id": "mi-containerd-12803"
+ },
+ {
+  "repo": "nats-io/nats-server",
+  "ref": "refs/pull/8166/head",
+  "pr": 8166,
+  "url": "https://github.com/nats-io/nats-server/pull/8166",
+  "title": "Fix message block corruption on filestore cipher conversion with cache clear",
+  "body": "This ensures that using an old `mb.bek` doesn't corrupt the block by maintaining an old offset from before the cache clear.",
+  "files": [
+   "server/filestore.go"
+  ],
+  "merged_at": "2026-05-14T13:11:51Z",
+  "source": "mined",
+  "id": "mi-nats-server-8166"
+ },
+ {
+  "repo": "coredns/coredns",
+  "ref": "refs/pull/8276/head",
+  "pr": 8276,
+  "url": "https://github.com/coredns/coredns/pull/8276",
+  "title": "plugin/file: Fix panic on zero-valued SOA refresh",
+  "body": "\r\n\r\n<!--\r\nThank you for contributing to CoreDNS!\r\nPlease provide the following information to help us make the most of your pull request:\r\n-->\r\n\r\n### 1. Why is this pull request needed and what does it do?\r\nThis PR fixes panic with zero-valued SOA refresh\r\n### 2. Which issues (if any) are related?\r\nn/a\r\n### 3. Which documentation changes (if any) need to be made?\r\nn/a\r\n### 4. Does this introduce a backward incompatible change or deprecation?\r\nn/a",
+  "files": [
+   "plugin/file/secondary.go"
+  ],
+  "merged_at": "2026-07-14T00:33:51Z",
+  "source": "mined",
+  "id": "mi-coredns-8276"
+ },
+ {
+  "source": "advisory",
+  "repo": "emiago/sipgo",
+  "ref": "a7be60a07f48c06b3cdd5a7d35eb820b3df5736c",
+  "ghsa": "GHSA-pg59-5vwg-4jxq",
+  "severity": "high",
+  "cwes": [
+   "CWE-789"
+  ],
+  "title": "SIPGO: DoS via unvalidated Content-Length in the stream parser",
+  "body": "### Summary\n\nThe stream parser allocates the SIP body buffer from the `Content-Length` header before validating its size, which can lead to an unauthenticated DoS.\n\n### Details\n\n`ParserStream.parseSingle` allocates the body buffer from the declared `Content-Length` with no size check (https://github.com/emiago/sipgo/blob/v1.4.0/sip/parser_stream.go#L195):\n\n```go\nbody := make([]byte, contentLength)   // contentLength is client-controlled, up to 2^32-1 (uint32)\n```\n\nThe `ParseMaxMessageLength` (65535) check is in the caller `ParseNext` (https://github.com/emiago/sipgo/blob/v1.4.0/sip/parser_stream.go#L132), and only runs after `parseSingle` has already allocated the buffer.\n\n### PoC\n\nTested on emiago/sipgo v1.4.0 (latest).\n\nSend a single message with a large `Content-Length` and no body to a SIP server:\n\n```\nINVITE sip:victim@example.com SIP/2.0\nVia: SIP/2.0/TCP attacker.example;branch=z9hG4bK1\nFrom: <sip:attacker@attacker.example>;tag=1\nTo: <sip:victim@example.com>\nCall-ID: 1@attacker.example\nCSeq: 1 INVITE\nContent-Length: 4000000000                     // <- a large Content-Length\n\n```\n\n### Suggested Fix\n\nValidate `contentLength` against `ParseMaxMessageLength` before the allocation.\n\n### Impact\n\nUnauthenticated DoS. Any service using `sipgo` with a stream transport (TCP/TLS/WS/WSS) can be forced to run out of memory.",
+  "files": [
+   "sip/parser_stream.go"
+  ],
+  "merged_at": "2026-06-30T15:54:44Z",
+  "url": "https://github.com/emiago/sipgo/commit/a7be60a07f48c06b3cdd5a7d35eb820b3df5736c",
+  "id": "ad-sipgo-a7be60a0"
+ },
+ {
+  "repo": "nats-io/nats-server",
+  "ref": "refs/pull/8546/head",
+  "pr": 8546,
+  "url": "https://github.com/nats-io/nats-server/pull/8546",
+  "title": "Fix potential underflow in `SkipMsgs` delete map accounting",
+  "body": "Without this, we can in some cases miss the `maxDeletes` gate from underflowing and then burn CPU and memory writing endlessly into `dmap`.",
+  "files": [
+   "server/filestore.go",
+   "server/util.go"
+  ],
+  "merged_at": "2026-09-02T11:08:45Z",
+  "source": "mined",
+  "id": "mi-nats-server-8546"
+ },
+ {
+  "repo": "traefik/traefik",
+  "ref": "refs/pull/13320/head",
+  "pr": 13320,
+  "url": "https://github.com/traefik/traefik/pull/13320",
+  "title": "Fix {url} placeholder in customErrors middleware now includes correct scheme",
+  "body": "### Description\r\n\r\nThis PR improves the `{url}` placeholder reconstruction in the `customErrors` middleware. Previously, it would only use `https` if `req.TLS` was non-nil, failing to account for cases where Traefik is behind a load balancer terminating TLS. By considering the `X-Forwarded-Proto` header, the `{url}` placeholder now correctly reflects the original protocol used by the client.\r\n\r\nFollow-up to #11829.\r\n\r\n#11876 fixed full URL reconstruction for the {url} placeholder. This PR handles the remaining case where Traefik is behind a TLS-terminating load balancer and the original scheme is available through X-Forwarded-Proto.",
+  "files": [
+   "pkg/middlewares/customerrors/custom_errors.go"
+  ],
+  "merged_at": "2026-08-28T15:30:06Z",
+  "source": "mined",
+  "id": "mi-traefik-13320"
+ },
+ {
+  "repo": "grafana/grafana",
+  "ref": "refs/pull/134001/head",
+  "pr": 134001,
+  "url": "https://github.com/grafana/grafana/pull/134001",
+  "title": "AppPlugins: Fix goroutine leak from secure value cache",
+  "body": "**What is this feature?**\r\n\r\nThis replaces the app plugin secure value cache `expirable.LRU` with `k8s.io/apimachinery`'s `LRUExpireCache`. The former `expirable.LRU` cache spawned a goroutine at creation time to proactively evict entries, while `k8s.io/apimachinery`'s `LRUExpireCache` does not use a goroutine and evicts at read time. The router builds an `AppPluginAPIBuilder` to poll for plugin API groups, and creating a new secure value cache that leaks a goroutine at every poll resulted in a goroutine & memory leak.\r\n\r\n**Why do we need this feature?**\r\n\r\n@stevesg noticed a goroutine & memory leak in the router.\r\n\r\n<img width=\"1040\" height=\"590\" alt=\"image (1)\" src=\"https://github.com/user-attachments/assets/4527c77a-1e8b-4e61-bd2a-6b804435bf09\" />\r\n\r\n**Special notes for your reviewer:**\r\n\r\n- Expired entries are removed when read, or when the size limit evicts them, rather than on a timer.\r\n- `TestNewAppPluginAPIBuilderStartsNoGoroutines` asserts that constructing builders starts no goroutines to prevent future leaks.\r\n",
+  "files": [
+   "pkg/registry/apis/appplugin/secure.go"
+  ],
+  "merged_at": "2026-10-01T21:41:11Z",
+  "source": "mined",
+  "id": "mi-grafana-134001"
+ },
+ {
+  "repo": "hashicorp/consul",
+  "ref": "refs/pull/23731/head",
+  "pr": 23731,
+  "url": "https://github.com/hashicorp/consul/pull/23731",
+  "title": "fix debug token leak.",
+  "body": "\r\n## Problem\r\nAt debug level, it also logged the full request URL, exposing the ACL token in plaintext.\r\n\r\n## Root Cause\r\n- ensureContentTypeHeader logged req.URL, which includes the query string and token.\r\n\r\n## Fix / Solution\r\n- Use req.URL.Path instead of req.URL in debug logs to prevent token exposure. \r\n\r\n## Testing\r\n- the raw token never appears in the logs, only <hidden>, while running at debug level.\r\n\r\nAlso verified the behavior before and after the fix, and go build ./agent/ passes.\r\n\r\nBackported PRs:\r\n- https://github.com/hashicorp/consul/pull/23742\r\n- https://github.com/hashicorp/consul-enterprise/pull/13127\r\n- https://github.com/hashicorp/consul-enterprise/pull/13128\r\n- https://github.com/hashicorp/consul-enterprise/pull/13129\r\n- https://github.com/hashicorp/consul-enterprise/pull/13130\r\n",
+  "files": [
+   "agent/http.go"
+  ],
+  "merged_at": "2026-07-17T05:39:55Z",
+  "source": "mined",
+  "id": "mi-consul-23731"
+ },
+ {
+  "repo": "hashicorp/consul",
+  "ref": "refs/pull/23868/head",
+  "pr": 23868,
+  "url": "https://github.com/hashicorp/consul/pull/23868",
+  "title": "fix(connect): propagate default_intention_policy into consul.Config at startup",
+  "body": "## Description\r\n\r\n### Problem\r\n\r\n`default_intention_policy` was never copied from `RuntimeConfig` into `consul.Config` inside `newConsulConfig()`. As a result, three server-side surfaces always saw `\"\"` for that field and silently fell back to `acl.default_policy` instead:\r\n\r\n- **`Intention.Check`** (`GET /v1/connect/intentions/check`, `consul intention check`)\r\n- **`Internal.ServiceTopology`** (the topology view in the UI)\r\n- **`Internal.IntentionUpstreams`** (transparent proxy upstream discovery)\r\n\r\nThis only has observable impact when `default_intention_policy` and `acl.default_policy` are set to **opposite values**. The two problematic cases:\r\n\r\n| `default_intention_policy` | `acl.default_policy` | Before | After |\r\n|---|---|---|---|\r\n| `allow` | `deny` | Upstreams **under-provisioned** — sidecars could fail to reach services they were authorized to reach | Correctly provisioned |\r\n| `deny` | `allow` | Check API and topology reported connections as **allowed** even though they were denied | Correctly denied |\r\n\r\nWhen the two policies agree, or `default_intention_policy` is unset, there is no behavior change.\r\n\r\nNote: Envoy RBAC enforcement was **not affected** — it already honored `default_intention_policy` through a separate path (`agent.go` → `proxycfg` → `rbac.go`).\r\n\r\n### Fix\r\n\r\nAdd the missing assignment in `newConsulConfig()`:\r\n\r\n```go\r\ncfg.DefaultIntentionPolicy = runtimeCfg.DefaultIntentionPolicy\r\n```\r\n\r\nThis is the bridge function that translates the parsed HCL/J",
+  "files": [
+   "agent/agent.go"
+  ],
+  "merged_at": "2026-09-02T06:32:33Z",
+  "source": "mined",
+  "id": "mi-consul-23868"
+ },
+ {
+  "repo": "cilium/cilium",
+  "ref": "refs/pull/47844/head",
+  "pr": 47844,
+  "url": "https://github.com/cilium/cilium/pull/47844",
+  "title": "Fix endpoint panic when verbose policy logging is enabled",
+  "body": "The endpoint policy debug logging assumes that the `policyDebugLog` field is set unconditionally. However, we didn't set the field when restoring the endpoint from JSON, leading to nil pointer exceptions when verbose policy logging was enabled.\r\n\r\nPrepared using AIL:2 - had AI analyze the stack trace and implemented the fix myself. The test is AI generated though, so maybe AIL:3 actually?\r\n\r\nFixes a commit by me, not cc'ing myself :grin: \r\n\r\nFixes: #47777\r\n\r\n```release-note\r\nResolve a endpoint manager crash for restored endpoints with verbose policy logging enabled.\r\n```\r\n\r\n",
+  "files": [
+   "pkg/endpoint/creator/creator.go",
+   "pkg/endpoint/endpoint.go"
+  ],
+  "merged_at": "2026-08-07T21:37:19Z",
+  "source": "mined",
+  "id": "mi-cilium-47844"
+ },
+ {
+  "repo": "cockroachdb/cockroach",
+  "ref": "refs/pull/35003/head",
+  "pr": 35003,
+  "url": "https://github.com/cockroachdb/cockroach/pull/35003",
+  "title": "kv: avoid setting EndTxn.Key again after a refresh",
+  "body": "Fixes #34982.\r\n\r\nThe `txnCommitter` is beneath the `txnSpanRefresher` in the `TxnCoordSender`'s\r\ninterceptor stack. Because the span refresher can re-issue batches, it\r\nneeds to be careful about what parts of the batch it mutates. We weren't\r\nbeing careful enough about setting the `EndTxn.Key` after a refresh,\r\neven though we were setting it to the same value. This looked like a\r\ndata race to the race detector and the `raceTransport`.\r\n\r\nI would really like to pull the `txnCommitter` above the `txnSpanRefresher`\r\nbut I don't think that would actually clean things up for two reasons:\r\n1. Once we introduce parallel commits, it would be very nice if the\r\n   span refresher never had to know about `STAGING` txns.\r\n2. The committer will need to generate retryable errors when any\r\n   in-flight write is pushed, even if the write's request itself\r\n   doesn't generate these errors.",
+  "files": [
+   "pkg/kv/txn_coord_sender.go",
+   "pkg/kv/txn_interceptor_committer.go"
+  ],
+  "merged_at": "2019-02-16T05:17:47Z",
+  "source": "goreal",
+  "kind": "nonblocking",
+  "subtype": "",
+  "id": "go-cockroach-35003",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "knative/serving",
+  "ref": "refs/pull/6472/head",
+  "pr": 6472,
+  "url": "https://github.com/knative/serving/pull/6472",
+  "title": "Fix data race introduced during refactoring of status.go",
+  "body": "<!--\r\nRequest Prow to automatically lint any go code in this PR:\r\n/assign @vagababov \r\n/assign @tcnghia \r\n/lint\r\n-->\r\n\r\nFixes the following data race:\r\n```\r\n==================\r\nWARNING: DATA RACE\r\nWrite at 0x00c0005413d8 by goroutine 57:\r\n  sync/atomic.AddInt32()\r\n      /usr/lib/google-golang/src/runtime/race_amd64.s:269 +0xb\r\n  knative.dev/serving/pkg/network/status.(*Prober).updateStates()\r\n      /usr/local/google/home/bancel/go/src/knative.dev/serving/pkg/network/status/status.go:400 +0x98\r\n  knative.dev/serving/pkg/network/status.(*Prober).processWorkItem()\r\n      /usr/local/google/home/bancel/go/src/knative.dev/serving/pkg/network/status/status.go:389 +0xb3f\r\n  knative.dev/serving/pkg/network/status.(*Prober).Start.func1()\r\n      /usr/local/google/home/bancel/go/src/knative.dev/serving/pkg/network/status/status.go:277 +0x38\r\n\r\nPrevious write at 0x00c0005413d8 by goroutine 92:\r\n  knative.dev/serving/pkg/network/status.(*Prober).IsReady()\r\n      /usr/local/google/home/bancel/go/src/knative.dev/serving/pkg/network/status/status.go:263 +0x1264\r\n  knative.dev/serving/pkg/network/status.TestPartialPodCancellation()\r\n      /usr/local/google/home/bancel/go/src/knative.dev/serving/pkg/network/status/status_test.go:393 +0xac3\r\n  testing.tRunner()\r\n      /usr/lib/google-golang/src/testing/testing.go:909 +0x199\r\n\r\nGoroutine 57 (running) created at:\r\n  knative.dev/serving/pkg/network/status.(*Prober).Start()\r\n      /usr/local/google/home/bancel/go/src/knative.dev/serving/pkg/network/",
+  "files": [
+   "pkg/network/status/status.go"
+  ],
+  "merged_at": "2020-01-09T21:10:56Z",
+  "source": "goreal",
+  "kind": "nonblocking",
+  "subtype": "",
+  "id": "go-serving-6472",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "istio/istio",
+  "ref": "refs/pull/8967/head",
+  "pr": 8967,
+  "url": "https://github.com/istio/istio/pull/8967",
+  "title": "[galley] fix data race",
+  "body": "fixes: #8966",
+  "files": [
+   "galley/pkg/fs/fssource.go"
+  ],
+  "merged_at": "2018-09-26T17:16:40Z",
+  "source": "goreal",
+  "kind": "nonblocking",
+  "subtype": "",
+  "id": "go-istio-8967",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "knative/serving",
+  "ref": "refs/pull/4908/head",
+  "pr": 4908,
+  "url": "https://github.com/knative/serving/pull/4908",
+  "title": "Fix data race in activator revision backend logger",
+  "body": "I ran 100 iterations of this test and was unable to replicate the data\r\nrace, but based on CI logs it seems to be coming from our logging within\r\nthis goroutine. Given that, moving logging out of the goroutines by\r\nusing errgroup should help.\r\n\r\nFixes #4907\r\n\r\n<!--\r\nRequest Prow to automatically lint any go code in this PR:\r\n\r\n/lint\r\n-->\r\n\r\n**Release Note**\r\n\r\n<!-- Enter your extended release note in the below block. If the PR requires\r\nadditional action from users switching to the new release, include the string\r\n\"action required\". If no release note is required, write \"NONE\". -->\r\n\r\n```release-note\r\nNONE\r\n```\r\n",
+  "files": [
+   "pkg/activator/revision_backends.go"
+  ],
+  "merged_at": "2019-07-24T02:55:36Z",
+  "source": "goreal",
+  "kind": "nonblocking",
+  "subtype": "",
+  "id": "go-serving-4908",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "grpc/grpc-go",
+  "ref": "refs/pull/1275/head",
+  "pr": 1275,
+  "url": "https://github.com/grpc/grpc-go/pull/1275",
+  "title": "transport: fix error handling on Stream deletion",
+  "body": "This patch writes client-side error before closing the active stream\r\nto fix blocking `RecvMsg` issue on `grpc.ClientStream` [1].\r\n\r\nPrevious gRPC client stream just exits on `ClientTransport.Error` [2].\r\nAnd latest gRPC added another select case on client connection context\r\ncancel [3]. Now when client stream closes from client connection context\r\ncancel, it calls `CloseStream` with `ErrClientConnClosing` error. And then\r\nthe stream gets deleted from `*http2Client.activeStreams`, without processing\r\nthe error [4]. Then in-flight `RecvMsg` call on this client will block on\r\n`*parser.Reader.recvMsg` [5].\r\n\r\nIn short,\r\n\r\n1. `ClientConn.Close`.\r\n2. in-flight streams will receive case `<-cc.ctx.Done()` https://github.com/grpc/grpc-go/blob/master/stream.go#L253-L255.\r\n3. `cs.closeTransportStream(ErrClientConnClosing)` calls `cs.t.CloseStream(cs.s, err)`.\r\n4. `CloseStream(cs.s, err)` calls `delete(t.activeStreams, s.id)` without handling the error.\r\n5. in-flight streams will never receive error, left hanging.\r\n\r\nI can reproduce in etcd tests with in-flight `recvMsg` calls to `Observe` RPC.\r\n\r\n---\r\n[1] https://github.com/coreos/etcd/pull/7896#issuecomment-305241742\r\n[2] https://github.com/grpc/grpc-go/blob/v1.2.x/stream.go#L235-L238\r\n[3] https://github.com/grpc/grpc-go/pull/1136\r\n[4] https://github.com/grpc/grpc-go/blob/master/transport/http2_client.go#L569\r\n[5] https://github.com/grpc/grpc-go/blob/master/rpc_util.go#L280\r\n\r\n/cc @xiang90 @heyitsanthony \r\n\r\nfixes #1293",
+  "files": [
+   "transport/http2_client.go"
+  ],
+  "merged_at": "2017-06-14T21:35:10Z",
+  "source": "goreal",
+  "kind": "blocking",
+  "subtype": "Communication Deadlock/Channel",
+  "id": "go-grpc-go-1275",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "kubernetes/kubernetes",
+  "ref": "refs/pull/25331/head",
+  "pr": 25331,
+  "url": "https://github.com/kubernetes/kubernetes/pull/25331",
+  "title": "etcd3/watcher: fix goroutine leak if ctx is canceled",
+  "body": "### Problem\n\nIn reflector.go, it could probably call Stop() without retrieving all results\nfrom ResultChan(). See [here](https://github.com/kubernetes/kubernetes/blob/master/pkg/client/cache/reflector.go#L369). A potential leak is that when an error has happened, it could block on resultChan,\nand then cancelling context in Stop() wouldn't unblock it.\n### What's this PR?\n\nThis fixes the problem by making it also select ctx.Done and cancel context afterwards if error happened.\n",
+  "files": [
+   "pkg/storage/etcd3/watcher.go"
+  ],
+  "merged_at": "2016-05-09T19:12:15Z",
+  "source": "goreal",
+  "kind": "blocking",
+  "subtype": "Communication Deadlock/Channel & Context",
+  "id": "go-kubernetes-25331",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "moby/moby",
+  "ref": "refs/pull/29733/head",
+  "pr": 29733,
+  "url": "https://github.com/moby/moby/pull/29733",
+  "title": "Fix race/deadlock in v1 plugin handlers",
+  "body": "When a plugin is activated, and then `plugins.Handle` is called to\r\nregister a new handler for a given plugin type, a deadlock occurs for anything which calls `waitActive`, including `Get`, and `GetAll`.\r\n\r\nThis happens because `Handle()` is setting `activated` to `false` to\r\nensure that plugin handlers are run on next activation.\r\nMaybe these handlers should be called immediately for any plugins which\r\nare already registered... but to preserve the existing behavior while\r\nfixing the deadlock, track if handlers have been run on plugins and\r\nreset when a new handler is registered.\r\n\r\nThe simplest way to reproduce the deadlock with Docker is to add a `-v\r\n/foo` to the test container created for the external graphdriver tests.\r\n\r\nping @mavenugo @anusha-ragunathan @tiborvass ",
+  "files": [
+   "pkg/plugins/plugins.go"
+  ],
+  "merged_at": "2017-01-04T01:02:16Z",
+  "source": "goreal",
+  "kind": "blocking",
+  "subtype": "Communication Deadlock/Condition Variable",
+  "id": "go-moby-29733",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "etcd-io/etcd",
+  "ref": "refs/pull/5509/head",
+  "pr": 5509,
+  "url": "https://github.com/etcd-io/etcd/pull/5509",
+  "title": "clientv3: fix deadlock on Get with concurrent Close",
+  "body": "/cc @gyuho\n",
+  "files": [
+   "clientv3/remote_client.go"
+  ],
+  "merged_at": "2016-06-01T14:37:28Z",
+  "source": "goreal",
+  "kind": "blocking",
+  "subtype": "Resource Deadlock/Double Locking",
+  "id": "go-etcd-5509",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "gohugoio/hugo",
+  "ref": "refs/pull/5379/head",
+  "pr": 5379,
+  "url": "https://github.com/gohugoio/hugo/pull/5379",
+  "title": "hugolib: Fix deadlock when content building times out",
+  "body": "Fixes #5375",
+  "files": [
+   "hugolib/page.go"
+  ],
+  "merged_at": "2018-10-30T11:18:30Z",
+  "source": "goreal",
+  "kind": "blocking",
+  "subtype": "Resource Deadlock/Double Locking",
+  "id": "go-hugo-5379",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "cockroachdb/cockroach",
+  "ref": "refs/pull/1055/head",
+  "pr": 1055,
+  "url": "https://github.com/cockroachdb/cockroach/pull/1055",
+  "title": "Do not move back the non-draining state in Quiesce",
+  "body": "@bdarnell , @spencerkimball , I believe this is what was proposed in #1040 . Could you take a look?\n\nThis allows tests that use multiTestContext to shut down gracefully even when multiple stores depend on one another.\n\nTest flakiness with short `scanInterval` seems to be fixed. Some tests still didn't finish when `scanInterval` is very short (e.g., 10ms), but it seems that was due to starvation (e.g., scanner always starts a new scan instead of looking at a stopper's channel). Tests also sometimes get a panic, but that will be fixed by #1051 .\n",
+  "files": [
+   "util/stopper.go"
+  ],
+  "merged_at": "2015-05-21T05:23:03Z",
+  "source": "goreal",
+  "kind": "blocking",
+  "subtype": "Mixed Deadlock/Channel & WaitGroup",
+  "id": "go-cockroach-1055",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "containerd/containerd",
+  "ref": "refs/pull/14085/head",
+  "pr": 14085,
+  "url": "https://github.com/containerd/containerd/pull/14085",
+  "title": "Fix data races and a deadlock in the byte stream helpers",
+  "body": "Race: clientStream.Send and Close both reach ttrpc's unsynchronized localClosed flag. readByteStream.window is written by the window goroutine and by Read, so make it atomic.\r\n\r\nDeadlock: Read the window by bytes copied instead of bytes received, so a short read leaves the window above windowSize.\n\n```release-note\nAvoid hangs and data races when streaming container standard I/O in CRI\n```\n",
+  "files": [
+   "core/streaming/proxy/streaming.go",
+   "core/transfer/streaming/reader.go"
+  ],
+  "merged_at": "2026-09-02T19:38:12Z",
+  "source": "mined",
+  "id": "mi-containerd-14085",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "grafana/grafana",
+  "ref": "refs/pull/130103/head",
+  "pr": 130103,
+  "url": "https://github.com/grafana/grafana/pull/130103",
+  "title": "Access Control: Fix registry race",
+  "body": "<!--\r\n\r\nThank you for sending a pull request! Here are some tips:\r\n\r\n1. If this is your first time, please read our contribution guide at https://github.com/grafana/grafana/blob/main/CONTRIBUTING.md\r\n\r\n2. Ensure you include and run the appropriate tests as part of your Pull Request.\r\n\r\n3. In a new feature or configuration option, an update to the documentation is necessary. Everything related to the documentation is under the docs folder in the root of the repository.\r\n\r\n4. If the Pull Request is a work in progress, make use of GitHub's \"Draft PR\" feature and mark it as such.\r\n\r\n5. If you can not merge your Pull Request due to a merge conflict, Rebase it. This gets it in sync with the main branch.\r\n\r\n6. Name your PR as \"<FeatureArea>: Describe your change\", e.g. Alerting: Prevent race condition. If it's a fix or feature relevant for the changelog describe the user impact in the title. The PR title is used to auto-generate the changelog for issues marked with the \"add to changelog\" label.\r\n\r\n7. If your PR content should be added to the What's New document for the next major or minor release, add the **add to what's new** label to your PR. Note that you should add this label to the main PR that introduces the feature; do not add this label to smaller PRs for the feature.\r\n\r\n-->\r\n\r\n**What is this feature?**\r\n\r\nThis makes the permission registry safe for concurrent role registration.\r\n\r\n**Why do we need this feature?**\r\n\r\nThe IAM role sync and plugin loader can register permissio",
+  "files": [
+   "pkg/services/accesscontrol/permreg/permreg.go"
+  ],
+  "merged_at": "2026-08-05T13:08:49Z",
+  "source": "mined",
+  "id": "mi-grafana-130103",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "containerd/containerd",
+  "ref": "refs/pull/12961/head",
+  "pr": 12961,
+  "url": "https://github.com/containerd/containerd/pull/12961",
+  "title": "Fix TOCTOU race bug in tar extraction",
+  "body": "See https://github.com/containerd/containerd/security/advisories/GHSA-ww5g-h6rh-8wm3 for a conversation around this particular bug.",
+  "files": [
+   "pkg/archive/tar_unix.go"
+  ],
+  "merged_at": "2026-03-04T01:03:47Z",
+  "source": "mined",
+  "id": "mi-containerd-12961",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "nats-io/nats-server",
+  "ref": "refs/pull/8080/head",
+  "pr": 8080,
+  "url": "https://github.com/nats-io/nats-server/pull/8080",
+  "title": "Fix potential deadlock when `clusterInfo` hits Raft lock contention",
+  "body": "Signed-off-by: Neil Twigg <neil@nats.io>",
+  "files": [
+   "server/jetstream_cluster.go"
+  ],
+  "merged_at": "2026-04-28T13:41:32Z",
+  "source": "mined",
+  "id": "mi-nats-server-8080",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "argoproj/argo-cd",
+  "ref": "refs/pull/28044/head",
+  "pr": 28044,
+  "url": "https://github.com/argoproj/argo-cd/pull/28044",
+  "title": "fix: race fix in setdefaultrole",
+  "body": "See https://github.com/argoproj/argo-cd/actions/runs/26565398909/job/78259351653\r\n\r\n<!--\r\nNote on DCO:\r\n\r\nIf the DCO action in the integration test fails, one or more of your commits are not signed off. Please click on the *Details* link next to the DCO action for instructions on how to resolve this.\r\n-->\r\n\r\nChecklist:\r\n\r\n* [ ] Either (a) I've created an [enhancement proposal](https://github.com/argoproj/argo-cd/issues/new/choose) and discussed it with the community, (b) this is a bug fix, or (c) this does not need to be in the release notes.\r\n* [ ] The title of the PR states what changed and the related issues number (used for the release note).\r\n* [ ] The title of the PR conforms to the [Title of the PR](https://argo-cd.readthedocs.io/en/latest/developer-guide/submit-your-pr/#title-of-the-pr)\r\n* [ ] I've included \"Closes [ISSUE #]\" or \"Fixes [ISSUE #]\" in the description to automatically close the associated issue.\r\n* [ ] I've updated both the CLI and UI to expose my feature, or I plan to submit a second PR with them.\r\n* [ ] Does this PR require documentation updates?\r\n* [ ] I've updated documentation as required by this PR.\r\n* [ ] I have signed off all my commits as required by [DCO](https://github.com/argoproj/argoproj/blob/master/community/CONTRIBUTING.md#legal)\r\n* [ ] I have written unit and/or e2e tests for my change. PRs without these are unlikely to be merged.\r\n* [ ] My build is green ([troubleshooting builds](https://argo-cd.readthedocs.io/en/latest/developer-guide/",
+  "files": [
+   "util/rbac/rbac.go"
+  ],
+  "merged_at": "2026-05-29T13:57:35Z",
+  "source": "mined",
+  "id": "mi-argo-cd-28044",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "nats-io/nats-server",
+  "ref": "refs/pull/8623/head",
+  "pr": 8623,
+  "url": "https://github.com/nats-io/nats-server/pull/8623",
+  "title": "Fix race between filestore compaction and message lookups",
+  "body": "## Summary\n\nWe found this while investigating orphaned messages accumulating in production WorkQueue streams: messages remained in storage behind the consumer delivery cursor, with no pending-ACK or redelivery tracking, even while newer messages continued to be processed. Both reproduced failure paths below can create this state. Repeated occurrences leave retained messages outside normal delivery/retry processing, consuming stream capacity.\n\nPeriodic compaction and block selection can run concurrently under the file-store read lock. Compaction currently publishes the last sequence of each record as it scans, temporarily shrinking the block boundary. Concurrent readers can select the wrong block.\n\nAccumulate the last sequence and its timestamp locally, and publish the completed upper bound only after the rewritten block file is installed successfully. Preserve the existing early update of the first sequence and the existing empty-block handling.\n\nAdd concurrent regressions for both initial delivery and redelivery, each covering linear and binary block selection. Four readers run alongside repeated compactions of a populated block, checking every read and consumer-state result. All coordination stays in the test code; no production test hook is needed.\n\n## Reproduced failure paths\n\n- **Initial delivery:** a read starting at 4096 returns 4097 from the next block, skipping the still-retained last message of the first block. The consumer can advance past the unread block tail.\n- ",
+  "files": [
+   "server/filestore.go"
+  ],
+  "merged_at": "2026-09-23T09:47:33Z",
+  "source": "mined",
+  "id": "mi-nats-server-8623",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "cilium/cilium",
+  "ref": "refs/pull/48646/head",
+  "pr": 48646,
+  "url": "https://github.com/cilium/cilium/pull/48646",
+  "title": "fix(cilium-cli/connectivity): Fix race on test params map",
+  "body": "In `check.(*ConnectivityTest).deployNamespace()` the `ct.params.NamespaceAnnotations` map is shared among test runners, but was mutated during namespace setup when `clustermesh.defaultGlobalNamespace` is `false`. Fix by cloning the map.\r\n\r\nFixes: 9ae977cec56c (\"ci: Add global namespace support for connectivity tests\")\r\n\r\n`params` is copied by value:\r\nhttps://github.com/cilium/cilium/blob/aff96d5610693e1cd8ef0d2023f7ffbe4ee34f1f/cilium-cli/cli/connectivity.go#L338\r\n\r\nand the aliased map `ct.params.NamespaceAnnotations` is mutated (through `namespace.Annotations`):\r\nhttps://github.com/cilium/cilium/blob/aff96d5610693e1cd8ef0d2023f7ffbe4ee34f1f/cilium-cli/connectivity/check/deployment.go#L767\r\n\r\nNote that `namespace.Annotations` is always non-nil when run from the CLI.\r\n\r\nBefore the fix, the race is detected by `go build -race ./cilium-cli/cmd/cilium`:\r\n```console\r\n$ ./cilium connectivity test --test-concurrency=2 --flow-validation=disabled --hubble=false\r\n...\r\n✨ [kind-kind] Creating namespace cilium-test-ccnp2 for connectivity check...\r\n✨ [kind-kind] Creating namespace cilium-test-ccnp2 for connectivity check...\r\nWARNING: DATA RACE\r\n...\r\nWrite at 0x00c00071aed0 by goroutine 42:\r\n  runtime.mapassign_faststr()\r\n      /usr/local/go/src/internal/runtime/maps/runtime_faststr.go:261 +0x0\r\n  github.com/cilium/cilium/cilium-cli/connectivity/check.(*ConnectivityTest).deployNamespace()\r\n      cilium/cilium/cilium-cli/connectivity/check/deployment.go:767 +0x40e\r\n...\r\nPrevious write at 0x0",
+  "files": [
+   "cilium-cli/connectivity/check/deployment.go"
+  ],
+  "merged_at": "2026-09-11T19:58:36Z",
+  "source": "mined",
+  "id": "mi-cilium-48646",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "argoproj/argo-cd",
+  "ref": "refs/pull/28343/head",
+  "pr": 28343,
+  "url": "https://github.com/argoproj/argo-cd/pull/28343",
+  "title": "fix(gitops-engine): race condition on empty-uid backfill",
+  "body": "This fixes a data race witnessed in a [recent unrelated ci run](https://github.com/argoproj/argo-cd/actions/runs/27765742699/job/82152496459?pr=28334) and reproduced via a unit test in this PR.\r\n\r\nSometimes owner refs don't have UIDs. This can happen either because the controller managing the child resource doesn't set the UID or because we've built a synthetic parent-child relationship in gitops-engine that doesn't exist in the k8s view of the resources (we do this for a few kinds).\r\n\r\nIn these cases, we go _find_ the UID for the parent resource and set it on the owner ref.\r\n\r\nToday we backfill that UID as a side-effect of running `buildGraph`. But `buildGraph` is meant to be read-only (it runs behind an RLock). \r\n\r\nThis PR changes the behavior to use an ephemeral copy of the UID to build the graph without writing it back to the cache. This fixes the race but comes with some downsides:\r\n\r\n1. Performance: we have to recalculate the owner ref for every `buildGraph` call instead of only once. In practice, this should be a minimal impact since empty UIDs are rare and finding the parent isn't very slow.\r\n2. `argocd app resources --output tree` correctness: the CLI relies on the owner ref UID being set. In cases where we don't have a UID, children go missing from the tree. \r\n\r\nimo the downsides are acceptable. I'll look at introducing a more official cache owner ref backfill method, but it got very complicated in my last attempt. It might not be worth ever doing.",
+  "files": [
+   "gitops-engine/pkg/cache/cluster.go"
+  ],
+  "merged_at": "2026-06-19T14:33:16Z",
+  "source": "mined",
+  "id": "mi-argo-cd-28343",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "cilium/cilium",
+  "ref": "refs/pull/47802/head",
+  "pr": 47802,
+  "url": "https://github.com/cilium/cilium/pull/47802",
+  "title": "ces: fix shutdown deadlock",
+  "body": "Integration test runs timed out due to a deadlock on shutting down the hive.\r\n\r\nWhen both queues are empty _and shutting down_ a `getQueue` call could get stuck waiting on the condition variable which was never broadcasted.\r\n\r\nAIL:2 - AI investigated CI logs and pointed towards the problem, I wrote the code.\r\n\r\n\r\n```release-note\r\nFix a deadlock in the shutdown of Cilium operator related to CiliumEndpointSlices.\r\n```\r\n",
+  "files": [
+   "operator/pkg/ciliumendpointslice/endpointslice.go"
+  ],
+  "merged_at": "2026-08-10T07:01:20Z",
+  "source": "mined",
+  "id": "mi-cilium-47802",
+  "topic": "concurrency"
+ },
+ {
+  "repo": "coredns/coredns",
+  "ref": "refs/pull/8366/head",
+  "pr": 8366,
+  "url": "https://github.com/coredns/coredns/pull/8366",
+  "title": "plugin/cache: Fix cache stale verification metadata race",
+  "body": "\r\n\r\n<!--\r\nThank you for contributing to CoreDNS!\r\nPlease provide the following information to help us make the most of your pull request:\r\n-->\r\n\r\n### 1. Why is this pull request needed and what does it do?\r\nThis PR fixes cache stale verification metadata race which isolate background stale-refresh metadata from the foreground request to prevent concurrent map writes and process crashes\r\n### 2. Which issues (if any) are related?\r\nn/a\r\n### 3. Which documentation changes (if any) need to be made?\r\nn/a\r\n### 4. Does this introduce a backward incompatible change or deprecation?\r\nn/a",
+  "files": [
+   "plugin/cache/handler.go"
+  ],
+  "merged_at": "2026-07-30T08:25:50Z",
+  "source": "mined",
+  "id": "mi-coredns-8366",
+  "topic": "concurrency"
  }
 ]
