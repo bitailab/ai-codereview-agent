@@ -364,3 +364,26 @@ def test_locate_removed_finds_deleted_evidence_only():
     assert _locate_removed(fd, "if len(b) > 255 {\n    return ErrShortstrTooLong\n}") == 11
     assert _locate_removed(fd, "length := uint8(len(b))") is None  # 仍在文件中的代码不走这条路径
     assert _locate_removed(None, "if len(b) > 255 {") is None
+
+
+def test_final_severity_drops_p0_unless_all_valid_votes_agree():
+    from huatuo.graph.nodes import Nodes
+    from huatuo.graph.state import VerifyVerdict
+    V = lambda valid, sev: VerifyVerdict(analysis="", valid=valid, severity=sev, reason="")  # noqa: E731
+    f = Nodes._final_severity
+    assert f([V(True, "P0"), V(True, "P0")]) == "P0"
+    assert f([V(True, "P0"), V(True, "P1")]) == "P1"            # 意见分裂：不阻断
+    assert f([V(True, "P0"), V(False, "P1"), V(True, "P0")]) == "P0"  # 否决票不参与级别，成立票一致
+    assert f([V(True, "P0"), V(True, "P2"), V(True, "P1")]) == "P1"  # 取成立票里较重的非 P0 级别
+    assert f([V(True, "P1")]) == "P1" and f([V(True, "P1"), V(True, "P2"), V(True, "P1")]) == "P1"
+
+
+def test_match_merges_same_spot_findings_only_when_titles_overlap():
+    from huatuo.graph.nodes import Nodes, _title_overlap
+    base = {"file": "a.go", "line": 384, "fingerprint": "x", "category": "bug", "source": "llm",
+            "title": "`done` channel 触发后未退出循环，导致 goroutine 永久挂起"}
+    dup = base | {"fingerprint": "y", "category": "resource", "title": "`done` channel 触发后未退出循环，导致函数永久挂起"}
+    other = base | {"fingerprint": "z", "category": "concurrency", "title": "共享变量 cnt 无同步访问存在数据竞争"}
+    assert Nodes._match(dup, [base], cross_category=False) == 0
+    assert Nodes._match(other, [base], cross_category=False) is None
+    assert _title_overlap(base["title"], dup["title"]) > 0.8 and _title_overlap(base["title"], other["title"]) < 0.2

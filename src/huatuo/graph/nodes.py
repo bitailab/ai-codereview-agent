@@ -146,6 +146,15 @@ def _locate_removed(fd, evidence: str) -> int | None:
     return min(found) if len(found) * 10 >= len(lines) * 6 else None
 
 
+def _title_overlap(a: str, b: str) -> float:
+    """两个标题的字符二元组重叠系数（0~1）。同一行上标题讲的是同一件事时很高（0.6~0.9），讲不同问题时接近 0。"""
+    def grams(t: str) -> set[str]:
+        t = re.sub(r"[\s`'\"，。,.:：;；（）()\[\]]", "", t.lower())
+        return {t[i:i + 2] for i in range(len(t) - 1)}
+    ga, gb = grams(a), grams(b)
+    return len(ga & gb) / max(1, min(len(ga), len(gb)))
+
+
 def _keyword_intent(text: str) -> str:
     t = text.lower()
     if any(w.lower() in t for w in FIXED_WORDS):
@@ -533,6 +542,8 @@ class Nodes:
             if x["fingerprint"] == r["fingerprint"] or (x["file"] == r["file"] and (
                 near_any or (x["category"] == r["category"] and dist <= 3)
                 or (dist <= 10 and normalize_code(x.get("title", "")) == title)
+                # 同一处两个类别、措辞不同但讲的是同一件事（基准里的重复发现）：标题高度重叠才合并，不同问题不会被吞
+                or (dist <= 2 and _title_overlap(x.get("title", ""), r.get("title", "")) >= 0.5)
             )):
                 return i
         return None
@@ -580,7 +591,7 @@ class Nodes:
                         log.info("复核判定误报，丢弃: %s L%s %s（%d/%d 票成立；%s）", f["file"], f["line"], f["title"],
                                  sum(v.valid for v in verdicts), len(verdicts), next(v for v in verdicts if not v.valid).reason)
                         continue
-                    f["severity"] = Counter(v.severity for v in verdicts if v.valid).most_common(1)[0][0]
+                    f["severity"] = self._final_severity(verdicts)
                     self._cap_test_severity(f)  # 复核模型可能把级别调回 P0/P1
             f |= {"status": "OPEN", "first_sha": head, "last_checked_sha": head, "dispute_rounds": 0}
             result.append(f)
@@ -588,6 +599,15 @@ class Nodes:
             actions.append({"kind": "event", "fingerprint": f["fingerprint"], "actor": "ai", "event": "created",
                             "content": f["title"]})
         return {"findings": result, "actions": actions}
+
+    @staticmethod
+    def _final_severity(verdicts: list[VerifyVerdict]) -> str:
+        """成立票里多数的级别；但只要有票把 P0 判成更低，就不保留 P0。
+        P0 会阻断 MR，复核票意见不一致（一票 P0、一票 P1）说明证据不够硬，降为 P1 仍会发布但不阻断。"""
+        sevs = [v.severity for v in verdicts if v.valid]
+        if "P0" in sevs and any(x != "P0" for x in sevs):
+            return min((x for x in sevs if x != "P0"), key=lambda x: ORDER[x])
+        return Counter(sevs).most_common(1)[0][0]
 
     def _verify_votes(self, msg: str, n: int, temperature: float | None = None) -> list[VerifyVerdict]:
         out = []
