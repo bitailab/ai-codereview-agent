@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +89,19 @@ CREATE TABLE IF NOT EXISTS feedback_samples (
 CREATE TABLE IF NOT EXISTS processed_notes (
     note_id INTEGER PRIMARY KEY,
     created_at TEXT NOT NULL
+);
+-- 文件块级续跑：LangGraph 只在整个扇出步骤结束后保存 checkpoint，审到一半重启会重审全部文件块；
+-- 每个文件块审完就把候选问题存在这里，同一版本、同一 diff 重启后直接沿用。任务结束（成功/失败/中止）后清掉。
+CREATE TABLE IF NOT EXISTS chunk_cache (
+    project_path TEXT NOT NULL,
+    mr_iid INTEGER NOT NULL,
+    head_sha TEXT NOT NULL,
+    path TEXT NOT NULL,
+    chunk INTEGER NOT NULL,
+    sig TEXT NOT NULL,
+    raw_findings TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (project_path, mr_iid, head_sha, path, chunk)
 );
 """
 
@@ -301,6 +314,26 @@ class Store:
         return [dict(r) for r in self._exec(
             "SELECT project_path, mr_iid, severity, category, status, status_reason, created_at, dispute_rounds FROM findings"
         ).fetchall()]
+
+    # ---------------- 文件块级续跑 ----------------
+    def chunk_get(self, project_path: str, mr_iid: int, head_sha: str, path: str, chunk: int, sig: str) -> list[dict] | None:
+        row = self._exec(
+            "SELECT sig, raw_findings FROM chunk_cache WHERE project_path=? AND mr_iid=? AND head_sha=? AND path=? AND chunk=?",
+            (project_path, mr_iid, head_sha, path, chunk),
+        ).fetchone()
+        return json.loads(row["raw_findings"]) if row and row["sig"] == sig else None
+
+    def chunk_put(self, project_path: str, mr_iid: int, head_sha: str, path: str, chunk: int, sig: str, findings: list[dict]) -> None:
+        self._exec(
+            "INSERT OR REPLACE INTO chunk_cache (project_path, mr_iid, head_sha, path, chunk, sig, raw_findings, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (project_path, mr_iid, head_sha, path, chunk, sig, json.dumps(findings, ensure_ascii=False, default=str), now()),
+        )
+
+    def chunk_clear(self, project_path: str, mr_iid: int) -> None:
+        self._exec("DELETE FROM chunk_cache WHERE project_path=? AND mr_iid=?", (project_path, mr_iid))
+        # 兜底：清掉两天前遗留的（任务被删或异常退出没走到清理）
+        self._exec("DELETE FROM chunk_cache WHERE created_at < ?", ((datetime.now(timezone.utc) - timedelta(days=2)).isoformat(timespec="seconds"),))
 
     # ---------------- notes ----------------
     def note_processed(self, note_id: int) -> bool:

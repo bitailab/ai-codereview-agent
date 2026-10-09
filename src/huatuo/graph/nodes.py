@@ -1,6 +1,7 @@
 """LangGraph 节点实现。"""
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from dataclasses import asdict
@@ -351,8 +352,17 @@ class Nodes:
         f = payload["file"]
         pp, iid = payload["event"]["project_path"], payload["event"]["mr_iid"]
         head = payload["head_sha"]
-        self._ensure_open(pp, iid, head, payload.get("dry_run", False))
+        dry = payload.get("dry_run", False)
+        self._ensure_open(pp, iid, head, dry)
         cfg = self.d.cfg.review
+        # 文件块级续跑：重启后沿用同一版本、同一 diff 已经审完的结果（LangGraph 的 checkpoint 要等整个扇出结束才保存）
+        sig = hashlib.sha1(f"{f['diff']}|{','.join(cfg.passes)}|{cfg.enable_tools}".encode()).hexdigest()[:16]
+        chunk_no = f.get("chunk", 1)
+        if not dry:
+            cached = self.d.store.chunk_get(pp, iid, head, f["path"], chunk_no, sig)
+            if cached is not None:
+                log.info("  %s (%d/%d): 续跑，沿用上次已完成的审查结果（%d 条候选问题）", f["path"], chunk_no, f.get("chunks", 1), len(cached))
+                return {"raw_findings": cached}
         mirror = self.d.mirror(pp)
         fd = self.d.mr_diff(pp, payload["diff_refs"]["base_sha"], head).get(f["path"])
         try:
@@ -383,6 +393,7 @@ class Nodes:
             passes = ["all"]
         else:
             passes = cfg.passes
+        pass_failed = False
         for pass_key in passes:
             name, checklist = PASS_CHECKLISTS.get(pass_key, PASS_CHECKLISTS["all"])
             set_step(f"审查 {f['path']}{chunk} [{pass_key}]")
@@ -405,6 +416,7 @@ class Nodes:
             except Exception as e:  # noqa: BLE001
                 raise_if_unavailable(e)
                 log.warning("审查 %s [%s] 失败: %s", f["path"], pass_key, e)
+                pass_failed = True
                 continue
             for item in result.findings:
                 d = item.model_dump()
@@ -413,6 +425,8 @@ class Nodes:
                 out.append(d)
             known_text += "".join(f"\n- L{x.line} [{x.severity}] {x.title}（本次）" for x in result.findings)
         log.info("  %s (%d/%d): %d 条候选问题", f["path"], f["chunk"], f["chunks"], len(out))
+        if not dry and not pass_failed:  # 有一轮失败的结果不缓存，续跑时重新审这一块
+            self.d.store.chunk_put(pp, iid, head, f["path"], chunk_no, sig, out)
         return {"raw_findings": out}
 
     def _understand(self, payload: dict, f: dict, context_pack: str, mirror, head: str) -> str:

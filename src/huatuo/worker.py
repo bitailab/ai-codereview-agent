@@ -45,16 +45,19 @@ def drain(deps: Deps, graph) -> None:
         try:
             run_job(deps, graph, job, resume=True)
             deps.store.finish_job(job["id"])
+            deps.store.chunk_clear(job["project_path"], job["mr_iid"])
         except MrNoLongerOpen as e:  # MR 已关闭/合并：任务直接结束，不标失败、不改评论
             log.info("任务 #%s 中止：%s", job["id"], e)
             deps.store.finish_job(job["id"])
+            deps.store.chunk_clear(job["project_path"], job["mr_iid"])
         except Exception as e:  # noqa: BLE001
-            if is_unavailable(e):  # 模型中途被卸载/服务重启：放回队列，等模型就绪后从 checkpoint 继续
+            if is_unavailable(e):  # 模型中途被卸载/服务重启：放回队列，等模型就绪后从 checkpoint 继续（文件块缓存保留）
                 log.warning("任务 #%s 中断：模型不可用，放回队列（%s）", job["id"], str(e)[:200])
                 deps.store.requeue_job(job["id"])
                 return
             log.exception("任务 #%s 失败", job["id"])
             deps.store.finish_job(job["id"], error=str(e)[:2000])
+            deps.store.chunk_clear(job["project_path"], job["mr_iid"])
             if job["kind"] == "new_push":
                 _mark_review_failed(deps, job)
 

@@ -427,3 +427,36 @@ def test_mr_closed_during_review_aborts_without_publishing(env):
     assert len(env.gl.notes) == 1
     note = "".join(env.gl.notes.values())
     assert "已退出审查" in note and "已关闭" in note and "正在审查" not in note
+
+
+def test_chunk_results_survive_a_restart(env, monkeypatch):
+    """审到一半重启后，同一版本、同一 diff 已经审完的文件块不再调用模型。"""
+    text_calls, finding_calls = [], []
+    orig_text, orig_struct = nodes_mod.invoke_text, nodes_mod.invoke_structured
+    monkeypatch.setattr(nodes_mod, "invoke_text", lambda m, role="review": text_calls.append(1) or orig_text(m, role))
+    monkeypatch.setattr(nodes_mod, "invoke_structured",
+                        lambda schema, m, role="review", temperature=None:
+                        (finding_calls.append(1) if schema is FindingList else None) or orig_struct(schema, m, role, temperature))
+    ev = {"kind": "new_push", "project_path": PP, "mr_iid": 7}
+    env.graph.invoke({"event": ev, "dry_run": False, "full": False})
+    first_text, first_find = len(text_calls), len(finding_calls)
+    assert first_find >= 1 and env.deps.store.conn.execute("select count(*) from chunk_cache").fetchone()[0] == 1
+
+    # 模拟重启后重新跑同一个版本（full=True 绕开“已审过”的跳过）：只剩 MR 意图摘要那一次文本调用
+    env.graph.invoke({"event": ev, "dry_run": False, "full": True})
+    assert len(finding_calls) == first_find, "已缓存的文件块不应再调用审查模型"
+    assert len(text_calls) - first_text == 1
+
+    env.deps.store.chunk_clear(PP, 7)  # 任务结束后清缓存：下一次审查必须重新来过
+    env.graph.invoke({"event": ev, "dry_run": False, "full": True})
+    assert len(finding_calls) == first_find + 1
+
+
+def test_chunk_cache_is_keyed_by_diff_signature(env):
+    s = env.deps.store
+    s.chunk_put(PP, 7, "abc", "a.go", 1, "sigA", [{"title": "t"}])
+    assert s.chunk_get(PP, 7, "abc", "a.go", 1, "sigA") == [{"title": "t"}]
+    assert s.chunk_get(PP, 7, "abc", "a.go", 1, "sigB") is None     # diff 变了
+    assert s.chunk_get(PP, 7, "abd", "a.go", 1, "sigA") is None     # 版本变了
+    s.chunk_clear(PP, 7)
+    assert s.chunk_get(PP, 7, "abc", "a.go", 1, "sigA") is None
