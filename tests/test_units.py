@@ -387,3 +387,18 @@ def test_match_merges_same_spot_findings_only_when_titles_overlap():
     assert Nodes._match(dup, [base], cross_category=False) == 0
     assert Nodes._match(other, [base], cross_category=False) is None
     assert _title_overlap(base["title"], dup["title"]) > 0.8 and _title_overlap(base["title"], other["title"]) < 0.2
+
+
+def test_incremental_scope_survives_rewritten_history():
+    from types import SimpleNamespace as NS
+    from huatuo.graph.nodes import _incremental_scope
+    def mirror(has=True, ancestor=True):
+        return NS(has_commit=lambda s: has, is_ancestor=lambda a, b: ancestor, changed_files=lambda a, b: ["a.go", "b.go"])
+    files, note = _incremental_scope(mirror(ancestor=True), "1111111aa", "2222222bb", False)
+    assert files == {"a.go", "b.go"} and "增量审查：仅审查" in note
+    files, note = _incremental_scope(mirror(ancestor=False), "1111111aa", "2222222bb", False)  # 变基/强推
+    assert files == {"a.go", "b.go"} and "历史已被改写" in note
+    assert _incremental_scope(mirror(has=False), "1111111aa", "2222222bb", False) == (None, None)  # 旧版本对象已不在镜像里
+    assert _incremental_scope(mirror(), "1111111aa", "2222222bb", True) == (None, None)             # 显式全量
+    assert _incremental_scope(mirror(), None, "2222222bb", False) == (None, None)                    # 第一次审查
+    assert _incremental_scope(mirror(), "2222222bb", "2222222bb", False) == (None, None)             # 同一版本

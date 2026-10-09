@@ -131,6 +131,20 @@ def _code_window(content: str | None, center: int | None, radius: int = 40) -> s
     return numbered(content, center - radius, center + radius)
 
 
+def _incremental_scope(mirror, last: str | None, head: str, full: bool | None) -> tuple[set[str] | None, str | None]:
+    """增量审查的范围：上次审过的版本到现在内容有变化的文件；返回 (文件集合或 None=全量, 提示)。
+    用两个版本的树差异，不要求 last 是 head 的祖先：开发者变基/改写历史后旧版本不再是祖先，
+    以前会因此退回全量（数小时的重复审查）。变基到新的目标分支时，树差异会多带进别人提交的文件，
+    但之后会和 MR 本身的改动文件取交集，所以只会比精确增量多审，不会漏审。"""
+    if not last or full or last == head or not mirror.has_commit(last):
+        return None, None
+    changed = set(mirror.changed_files(last, head))
+    if mirror.is_ancestor(last, head):
+        return changed, f"增量审查：仅审查 `{last[:8]}..{head[:8]}` 之间有变化的文件。"
+    return changed, (f"增量审查：提交历史已被改写（`{last[:8]}` 不是 `{head[:8]}` 的祖先），"
+                     "按两个版本的内容差异，仅审查有变化的文件。")
+
+
 def _locate_removed(fd, evidence: str) -> int | None:
     """证据引用的是本次删除的代码（head 里已经没有）：在被删除行里找，返回删除点的锚点行号。
     “删掉了某个检查/加锁”的问题只能这样引用。至少 60% 的有效证据行要在被删除行中找到。"""
@@ -227,11 +241,10 @@ class Nodes:
         diffs = self.d.mr_diff(pp, refs["base_sha"], head)
         notes: list[str] = []
 
-        changed_since = None
         last = self.d.store.mr_state(pp, iid).get("last_reviewed_sha")
-        if last and not state.get("full") and last != head and mirror.has_commit(last) and mirror.is_ancestor(last, head):
-            changed_since = set(mirror.changed_files(last, head))
-            notes.append(f"增量审查：仅审查 `{last[:8]}..{head[:8]}` 之间有变化的文件。")
+        changed_since, note = _incremental_scope(mirror, last, head, state.get("full"))
+        if note:
+            notes.append(note)
 
         ignore = cfg.ignore_for(pp, state["mr"].get("repo_ignore"))
         candidates: list[FileDiff] = []
